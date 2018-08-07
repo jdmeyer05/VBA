@@ -1,0 +1,685 @@
+Edited 8-7-2018
+Option Explicit
+Dim dlgFolder As FileDialog
+Dim wkbOpen, wkbPass As Workbook
+Dim ErrorCount, wbkCount, lngDialog As Double
+Dim strFolder, strFileName As String
+Dim varResult As Variant
+
+Sub Company_Labor()
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+
+i = 1
+k = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN
+'COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND.
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)
+
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+        
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            For x = 2 To 12
+                If wksEach.Cells(17, x).Value <> 0 And wksEach.Cells(41, x).Value = 0 Then      'IF SALES <> 0 AND COMPANY LABOR = 0
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(41, x).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+            Next x
+        End If
+        
+        If ErrorCount > 0 Then
+            wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+            wksEach.Copy Before:=wkbPass.Sheets(1)
+            wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+            wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+            k = k + 1
+        End If
+    Next wksEach
+        
+        
+DoEvents
+wkbOpen.Close savechanges:=False
+Let strFileName = VBA.FileSystem.Dir()
+i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+
+Call Finalization
+
+End Sub
+
+Sub MoM_Analysis_Operated(ByVal dblPercent As Double, ByVal dblMin As Double, ByVal dblDollar As Double)
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+        
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            wksEach.Range("r2").Select  'DESELECTS ENTIRE REGION FOR A SINGLE CELL OUTSIDE OF REGION TO AVOID HIGHLIGHTING ERROR
+            z = 35
+            For z = 35 To 74    'SETS LOOP FOR VERTICAL MOVEMENT
+                y = 3
+                For x = 2 To 12     'SETS LOOP FOR HORIZONTAL MOVEMENT
+                    If wksEach.Cells(z, x) > dblMin And wksEach.Cells(z, y) > dblMin Then 'MINIMUM OF 200 FOR EITHER CELL TESTED
+                        If (wksEach.Cells(z, y).Value - wksEach.Cells(z, x).Value) / wksEach.Cells(z, x).Value > dblPercent Then
+                            ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        End If
+                            wksEach.Cells(z, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                        If (wksEach.Cells(z, y).Value - wksEach.Cells(z, x).Value) > dblDollar Then
+                            ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                            wksEach.Cells(z, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                        End If
+                    End If
+                    y = y + 1
+                Next x
+            Next z
+        End If
+        
+        If ErrorCount > 0 Then
+           wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+           wksEach.Copy Before:=wkbPass.Sheets(1)
+           wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+           wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+           k = k + 1
+        End If
+        
+    Next wksEach
+    
+DoEvents        'PREVENTS INFINITE LOOPING
+
+wkbOpen.Close savechanges:=False
+Let strFileName = VBA.FileSystem.Dir()
+    i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+
+
+Sub MoM_Analysis_Operated_HydraCat1(ByVal dblPercent As Double, ByVal dblMin As Double, ByVal dblDollar As Double, strCategory1 As String)
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+    
+i = 1
+x = 2
+k = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+    
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+    
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            y = 3
+            For x = 2 To 12     'SETS LOOP FOR HORIZONTAL MOVEMENT
+                If wksEach.Cells(strCategory1, x) > dblMin And wksEach.Cells(strCategory1, y) > dblMin Then 'MINIMUM OF 200 FOR EITHER CELL TESTED
+                    If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) / wksEach.Cells(strCategory1, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    
+                    If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    
+                End If
+                y = y + 1
+            Next x
+        End If
+        If ErrorCount > 0 Then
+           wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+           wksEach.Copy Before:=wkbPass.Sheets(1)
+           wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+           wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+           k = k + 1
+        End If
+    Next wksEach
+
+DoEvents        'PREVENTS INFINITE LOOPING
+
+wkbOpen.Close savechanges:=False
+Let strFileName = VBA.FileSystem.Dir()
+    i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+Sub MoM_Analysis_Operated_HydraCat2(ByVal dblPercent As Double, ByVal dblMin As Double, ByVal dblDollar As Double, strCategory1 As String, strCategory2 As String)
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+    
+i = 1
+x = 2
+k = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+        
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+    ErrorCount = 0
+    If bWorksheet_Name_Test(wksEach.Name) = False Then
+        y = 3
+        For x = 2 To 12     'SETS LOOP FOR HORIZONTAL MOVEMENT
+            If wksEach.Cells(strCategory1, x) > dblMin And wksEach.Cells(strCategory1, y) > dblMin Then 'MINIMUM OF 200 FOR EITHER CELL TESTED
+                If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) / wksEach.Cells(strCategory1, x).Value > dblPercent Then
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+                If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) > dblDollar Then
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+            End If
+            If wksEach.Cells(strCategory2, x) > dblMin And wksEach.Cells(strCategory2, y) > dblMin Then
+                If (wksEach.Cells(strCategory2, y).Value - wksEach.Cells(strCategory2, x).Value) / wksEach.Cells(strCategory2, x).Value > dblPercent Then
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(strCategory2, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+                If (wksEach.Cells(strCategory2, y).Value - wksEach.Cells(strCategory2, x).Value) > dblDollar Then
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(strCategory2, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+            End If
+            y = y + 1
+        Next x
+    End If
+    If ErrorCount > 0 Then
+       wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+       wksEach.Copy Before:=wkbPass.Sheets(1)
+       wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+       wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+       k = k + 1
+    End If
+    Next wksEach
+    
+    DoEvents        'PREVENTS INFINITE LOOPING
+    
+    wkbOpen.Close savechanges:=False
+    Let strFileName = VBA.FileSystem.Dir()
+        i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+Sub MoM_Analysis_Operated_HydraCat3(ByVal dblPercent As Double, ByVal dblMin As Double, ByVal dblDollar As Double, strCategory1 As String, strCategory2 As String, strCategory3 As String)
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+    
+i = 1
+x = 2
+k = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+        
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            y = 3
+            For x = 2 To 12     'SETS LOOP FOR HORIZONTAL MOVEMENT
+                If wksEach.Cells(strCategory1, x) > dblMin And wksEach.Cells(strCategory1, y) > dblMin Then 'MINIMUM OF 200 FOR EITHER CELL TESTED
+                    If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) / wksEach.Cells(strCategory1, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                If wksEach.Cells(strCategory2, x) > dblMin And wksEach.Cells(strCategory2, y) > dblMin Then
+                    If (wksEach.Cells(strCategory2, y).Value - wksEach.Cells(strCategory2, x).Value) / wksEach.Cells(strCategory2, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory2, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strCategory2, y).Value - wksEach.Cells(strCategory2, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory2, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                If wksEach.Cells(strCategory3, x) > dblMin And wksEach.Cells(strCategory3, y) > dblMin Then
+                    If (wksEach.Cells(strCategory3, y).Value - wksEach.Cells(strCategory3, x).Value) / wksEach.Cells(strCategory3, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory3, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strCategory3, y).Value - wksEach.Cells(strCategory3, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory3, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                y = y + 1
+            Next x
+        End If
+        If ErrorCount > 0 Then
+           wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+           wksEach.Copy Before:=wkbPass.Sheets(1)
+           wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+           wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+           k = k + 1
+        End If
+    Next wksEach
+    
+    DoEvents        'PREVENTS INFINITE LOOPING
+    
+    wkbOpen.Close savechanges:=False
+    Let strFileName = VBA.FileSystem.Dir()
+        i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+Sub MoM_Analysis_Operated_HydraCat4(ByVal dblPercent As Double, ByVal dblMin As Double, ByVal dblDollar As Double, strCategory1 As String, strCategory2 As String, strCategory3 As String, strcategory4 As String)
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+    
+i = 1
+x = 2
+k = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+        
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            y = 3
+            For x = 2 To 12     'SETS LOOP FOR HORIZONTAL MOVEMENT
+                If wksEach.Cells(strCategory1, x) > dblMin And wksEach.Cells(strCategory1, y) > dblMin Then 'MINIMUM OF 200 FOR EITHER CELL TESTED
+                    If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) / wksEach.Cells(strCategory1, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strCategory1, y).Value - wksEach.Cells(strCategory1, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory1, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                If wksEach.Cells(strCategory2, x) > dblMin And wksEach.Cells(strCategory2, y) > dblMin Then
+                    If (wksEach.Cells(strCategory2, y).Value - wksEach.Cells(strCategory2, x).Value) / wksEach.Cells(strCategory2, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory2, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strCategory2, y).Value - wksEach.Cells(strCategory2, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory2, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                If wksEach.Cells(strCategory3, x) > dblMin And wksEach.Cells(strCategory3, y) > dblMin Then
+                    If (wksEach.Cells(strCategory3, y).Value - wksEach.Cells(strCategory3, x).Value) / wksEach.Cells(strCategory3, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory3, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strCategory3, y).Value - wksEach.Cells(strCategory3, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strCategory3, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                If wksEach.Cells(strcategory4, x) > dblMin And wksEach.Cells(strcategory4, y) > dblMin Then
+                    If (wksEach.Cells(strcategory4, y).Value - wksEach.Cells(strcategory4, x).Value) / wksEach.Cells(strcategory4, x).Value > dblPercent Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strcategory4, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                    If (wksEach.Cells(strcategory4, y).Value - wksEach.Cells(strcategory4, x).Value) > dblDollar Then
+                        ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                        wksEach.Cells(strcategory4, y).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                    End If
+                End If
+                y = y + 1
+            Next x
+        End If
+        If ErrorCount > 0 Then
+           wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+           wksEach.Copy Before:=wkbPass.Sheets(1)
+           wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+           wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+           k = k + 1
+        End If
+    Next wksEach
+    
+    DoEvents        'PREVENTS INFINITE LOOPING
+    
+    wkbOpen.Close savechanges:=False
+    Let strFileName = VBA.FileSystem.Dir()
+        i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+Sub No_Sales()
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+    
+i = 1
+x = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+        
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            wksEach.Range("r2").Select  'DESELECTS ENTIRE REGION FOR A SINGLE CELL OUTSIDE OF REGION TO AVOID HIGHLIGHTING ERROR
+            For x = 2 To 12
+                If wksEach.Cells(17, x).Value = 0 And wksEach.Cells(41, x).Value <> 0 Then      'IF SALES <> 0 AND COMPANY LABOR = 0
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(41, x).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+            Next x
+        End If
+        If ErrorCount > 0 Then
+          wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+          wksEach.Copy Before:=wkbPass.Sheets(1)
+          wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+          wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+          k = k + 1
+        End If
+    Next wksEach
+
+    DoEvents        'PREVENTS INFINITE LOOPING
+    
+    wkbOpen.Close savechanges:=False
+    Let strFileName = VBA.FileSystem.Dir()
+        i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+Sub Electric_Go()
+
+Dim CurrentProgress, ProgressPrecentage, BarWidth As Double
+Dim i, x, y, k, z As Long
+Dim wksEach As Worksheet
+
+MsgBox "Running macro for Electricity Analysis"
+
+Call Open_Save_Wkb
+Call Locate_File
+    wbkCount = 0
+Call Workbook_Count
+Call InitProgressBar
+    
+i = 1
+x = 2
+
+'CYCLES THROUGH EACH WORKSHEET IN FILE AND ALL FILES IN FOLDER TO FIND CRITERIA AND THEN COPIES THE SHEET OVER TO NEW WORKBOOK FOR RESEARCH IF FOUND
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+While strFileName <> VBA.Constants.vbNullString      'WILL PERFORM OPERATION SO LONG AS THERE IS A FILE
+Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)       'OPENS NEXT WORKBOOK
+        
+'SETS UP PROGESS BAR FOR USER SO THEY CAN TELL IF THE MACRO HAS CRASHED OR NOT
+CurrentProgress = i / wbkCount      'DIVIDES THE CURRENT NUMBER OF WORKBOOKS OPENED BY THE TOTAL NUMBER OF WORKBOOKS IN THE FOLDER
+BarWidth = Progress.Border.Width * CurrentProgress
+ProgressPrecentage = Round(CurrentProgress * 100, 0)
+Progress.Bar.Width = BarWidth
+Progress.Text.Caption = ProgressPrecentage & "% Complete"
+        
+    For Each wksEach In wkbOpen.Worksheets      'LOOPS THROUGH EACH WORKSHEET AND TESTS FOR CRITERIA
+        ErrorCount = 0
+        If bWorksheet_Name_Test(wksEach.Name) = False Then
+            wksEach.Range("r2").Select  'DESELECTS ENTIRE REGION FOR A SINGLE CELL OUTSIDE OF REGION TO AVOID HIGHLIGHTING ERROR
+            For x = 2 To 11
+                If wksEach.Cells(17, x).Value <> 0 And wksEach.Cells(48, x).Value = 0 Then      'IF SALES <> 0 AND COMPANY LABOR = 0
+                    ErrorCount = ErrorCount + 1   'COUNTS NUMBER OF ERRORS
+                    wksEach.Cells(48, x).Interior.ColorIndex = 37  'HIGHLIGHTS LATEST PERIOD WITH ERROR
+                End If
+            Next x
+        End If
+            If ErrorCount > 0 Then
+              wksEach.Range("q5").Value = "# of errors on page = " & ErrorCount
+              wksEach.Copy Before:=wkbPass.Sheets(1)
+              wkbPass.Worksheets("Master").Cells(k, 1).Value = ActiveSheet.Name
+              wkbPass.Worksheets("Master").Cells(k, 2).Value = ErrorCount
+              k = k + 1
+            End If
+    Next wksEach
+    
+    DoEvents        'PREVENTS INFINITE LOOPING
+    
+    wkbOpen.Close savechanges:=False
+    Let strFileName = VBA.FileSystem.Dir()
+        i = i + 1
+Wend
+endscript:      'EXIT POINT IF USER CANCELLED
+    
+Call Finalization
+
+End Sub
+
+Sub Open_Save_Wkb()
+
+Workbooks.Add
+
+varResult = Application.GetSaveAsFilename(FileFilter:= _
+"Excel Files (*.xlsx)," & "*.xlsx, Macro Enabled" & _
+"Workbook (*.xlsm), *xlsm")
+
+If varResult <> False Then
+    ActiveWorkbook.SaveAs Filename:=varResult, _
+    FileFormat:=xlWorkbookNormal
+Else
+    Exit Sub
+End If
+Set wkbPass = ActiveWorkbook
+With ActiveWorkbook
+    .Sheets(1).Name = "Master"
+    .Sheets(1).Cells(1, 1).Value = "Well Name"
+    .Sheets(1).Cells(1, 2).Value = "# of Errors"
+    .Sheets(2).Delete
+    .Sheets(2).Delete
+End With
+
+End Sub
+
+Sub Locate_File()
+
+Set dlgFolder = Application.FileDialog(msoFileDialogFolderPicker)       'ALLOWS USER TO SELECT DESIRED FOLDER TO OPERATE IN
+    Let dlgFolder.Title = "Please select the folder you wish to review."
+    Let lngDialog = dlgFolder.Show
+    If lngDialog = 0 Then
+        VBA.Interaction.MsgBox Prompt:="Operation cancelled by user."       'ALLOWS USER TO CANCEL AND EXIT MACRO
+        Exit Sub
+    Else
+        Let strFolder = dlgFolder.SelectedItems(1) & "\"
+    End If
+
+End Sub
+Sub Workbook_Count()
+
+'COUNTS THE NUMBER OF FILES IN THE FOLDER AND SETS THAT NUMBER TO THE wbkCount VARIABLE
+strFileName = VBA.FileSystem.Dir(PathName:=strFolder & "*.xls*")
+On Error Resume Next
+   Do While strFileName <> VBA.Constants.vbNullString
+        wbkCount = wbkCount + 1
+        strFileName = Dir()
+   Loop
+
+End Sub
+
+Sub Finalization()
+
+Unload Progress     'DROPS OUT THE USERFORM
+wkbPass.Worksheets("Master").Select
+Cells.Select
+Cells.EntireColumn.AutoFit
+wkbPass.Worksheets("Master").Move Before:=wkbPass.Sheets(1)
+
+MsgBox wkbPass.Worksheets.Count & " wells have been identified"        'TELLS USER HOW MANY WELLS KICKED OUT
+
+End Sub
+
+Function bWorksheet_Name_Test(ByVal strWksName As String) As Boolean
+
+Dim ws As Worksheet
+Dim i As Long
+Dim rng As Long
+
+Set ws = ThisWorkbook.Sheets(1)
+
+bWorksheet_Name_Test = False
+
+rng = ws.Cells(Rows.Count, "a").End(xlUp).Row
+
+For i = 1 To rng
+    If ws.Cells(i, 1).Value = strWksName Then
+        bWorksheet_Name_Test = True
+        Exit For
+    End If
+Next i
+        
+
+End Function
+Sub InitProgressBar()
+
+With Progress
+    .Bar.Width = 0
+    .Text.Caption = "0% Complete"
+    .Show vbModeless
+    
+End With
+
+End Sub
