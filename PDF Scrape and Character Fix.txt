@@ -1,0 +1,266 @@
+Option Base 1
+Sub Location()
+
+    Dim Column_Locations(1 To 5) As Variant
+    Dim ColumnCount As Long
+    Dim Statement As Worksheet
+    Dim Output As Worksheet
+    Dim StartTime As Double
+    Dim SecondsElapsed As Double
+
+Application.ScreenUpdating = False
+Application.Calculation = xlManual
+
+StartTime = Timer
+
+'-------------------------------------------------------------------------------------------------------------
+'QRA Sample Portion
+'-------------------------------------------------------------------------------------------------------------
+
+    Set Statement = ThisWorkbook.Worksheets("QRA Sample Statement")
+    Set Output = ThisWorkbook.Worksheets("QRA Sample Output")
+    
+Output.Range("A2:E100000").ClearContents
+    
+Call Column_Find(Column_Locations, Statement)
+   
+For ColumnCount = 1 To 5
+    
+    Call Character_Seperator(Column_Locations, ColumnCount, Statement, Output)
+    
+Next
+
+'-------------------------------------------------------------------------------------------------------------
+'Enervus Portion
+'-------------------------------------------------------------------------------------------------------------
+    
+    Set Statement = ThisWorkbook.Worksheets("Enverus Statement")
+    Set Output = ThisWorkbook.Worksheets("Enervus Statement Output")
+    
+Output.Range("A2:E100000").Clear
+
+Call Column_Find(Column_Locations, Statement)
+
+For ColumnCount = 1 To 5
+    
+    Call Character_Seperator(Column_Locations, ColumnCount, Statement, Output)
+    
+Next
+
+Call Finalize
+
+ThisWorkbook.Worksheets("QRA Sample Output").Activate
+
+SecondsElapsed = Round(Timer - StartTime, 2)
+
+MsgBox "This code ran successfully in " & SecondsElapsed & " seconds", vbInformation
+
+Application.Calculation = xlAutomatic
+Application.ScreenUpdating = True
+
+End Sub
+
+Sub Character_Seperator(Column_Locations, ColumnCount, Statement As Worksheet, Output As Worksheet)
+
+    Dim pos As Integer 'Holds the value for the index position of the "."
+    Dim x As Long 'Row Value
+    Dim z As Long: z = 1 'Initial Array Position Value
+    Dim k As Long: k = 1 'Initial Array Position Value
+    Dim i As Long: i = 1 'Initial Array Position Value
+    Dim j As Long: j = 1 'Initial Array Position Value
+    Dim array1() As Variant
+    Dim array2() As Variant
+    Dim array3() As Variant
+    Dim array4() As Variant
+    
+lrow = Statement.Cells(Rows.Count, 1).End(xlUp).Row 'Finds the last row with data
+
+ReDim array1(z) 'Initializes array
+
+For x = 1 To lrow 'Loops through each cell in a given column down to the last cell with a value
+    
+    If Character_Identify(Statement, x, Column_Locations(ColumnCount)) > 1 Then 'Character Identify determines if the current cell contains two "."
+                                                                       'if it does then the if statement is triggered
+    
+        pos = InStr(Statement.Cells(x, Column_Locations(ColumnCount)), ".") + 2 'This sets the variable "pos" to the position of the first "." and
+                                                                                'adds two to account for the two decimal places in each value
+        
+        FirstValue = Application.WorksheetFunction.Clean(Trim(Mid(Statement.Cells(x, Column_Locations(ColumnCount)), 1, pos))) 'Assigns the first value that is split
+        SecondValue = Application.WorksheetFunction.Clean(Trim(Mid(Statement.Cells(x, Column_Locations(ColumnCount)), pos + 1, 100))) 'Assigns the second value that is split
+        
+        array1(z) = FirstValue 'Places the first value in cell "z" in array1
+        z = z + 1
+        ReDim Preserve array1(z) 'Redimentions the array to the +1 size while also preserving previous values
+        
+        array1(z) = SecondValue 'Places the second value in cell "z" in array1
+        z = z + 1
+        ReDim Preserve array1(z) 'Redimentions the array to the +1 size while also preserving previous values
+    
+    Else
+    
+        array1(z) = (Statement.Cells(x, Column_Locations(ColumnCount))) 'This captures any other values in the column and puts them in the array
+        z = z + 1
+        ReDim Preserve array1(z) 'Redimentions the array to the +1 size while also preserving previous values
+        
+    End If
+Next x
+
+ReDim Preserve array1(z - 2) 'Removes the last empty cell in array1
+
+'-------------------------------------------------------------------------------------------------------------
+'Clean up data
+'-------------------------------------------------------------------------------------------------------------
+
+ReDim array2(k) 'Initialize array
+
+x = 1 'Initialize x
+For x = 1 To z - 2
+    If array1(x) <> "" Then 'If a blank/empty value is found it is not moved over to the new array
+        array2(k) = array1(x)
+        k = k + 1
+        ReDim Preserve array2(k)
+    End If
+Next x
+
+ReDim Preserve array2(k - 1) 'Removes the last empty cell in array1
+
+ReDim array3(i) 'Initializes array3
+Dim MyVar
+Dim TypeCheck
+
+x = 1
+For x = 1 To UBound(array2)
+
+    MyVar = array2(x) 'Stores the next array value to MyVar
+    Type_Check = IsNumeric(MyVar) 'Checks for the numeric data type of MyVar and returns TRUE or FALSE to Type_Check
+    
+    If Type_Check = True Then 'If the data type in Type_Check is numeric
+        array3(i) = array2(x)
+        i = i + 1
+        ReDim Preserve array3(i)
+    End If
+Next x
+
+If i = 1 Then
+    GoTo Continue
+End If
+
+ReDim Preserve array3(i - 1) 'Removes the last empty cell in array1
+
+ReDim array4(j)
+
+x = 1
+For x = 1 To UBound(array3)
+
+    If array3(x) <> 0 Then
+        array4(j) = array3(x)
+        j = j + 1
+        ReDim Preserve array4(j)
+    End If
+Next x
+
+ReDim Preserve array4(j - 1) 'Removes the last empty cell in array1
+
+x = 1
+For x = 1 To j - 1 'Loops from 1 to the end of the array size value
+    array4(x) = CDbl(array4(x)) 'Converts any values that are not already a numeric to numeric with data type "double"
+Next x
+
+Output.Range(Output.Cells(2, ColumnCount), Output.Cells(j, ColumnCount)).Value = Application.Transpose(array4) 'Pastes the array to a specific location determined depending on
+                                                                                                               'which category the loop is on
+Continue:
+
+End Sub
+Sub Column_Find(Column_Locations, Statement As Worksheet)
+
+'This subroutine loops through the first 50 rows and columns in order to identify
+'which columns the categories sought after are located.
+
+    Dim h As Long
+    Dim g As Long
+    
+ReDim arr1(1 To 5)
+    
+For g = 1 To 50
+    For h = 1 To 50
+        If InStr(Statement.Cells(g, h), "Volume") > 0 Then 'Locates which column the gross volumes are in
+            Column_Locations(1) = h
+            Exit For
+        End If
+    Next h
+Next g
+
+For g = 1 To 50
+    For h = 1 To 50
+        If InStr(Statement.Cells(g, h), "Value") > 0 Then 'Locates which column the gross values are in
+            Column_Locations(2) = h
+            Exit For
+        End If
+    Next h
+Next g
+
+For g = 1 To 50
+    For h = 1 To 50
+        If InStr(Statement.Cells(g, h), "Tax") > 0 Then 'Locates which column the taxes are in
+            Column_Locations(3) = h
+            Exit For
+        End If
+    Next h
+Next g
+
+For g = 1 To 50
+    For h = 1 To 50
+        If InStr(Statement.Cells(g, h), "Deducts") > 0 Then 'Locates which column the deducts are in
+            Column_Locations(4) = h
+            Exit For
+        End If
+    Next h
+Next g
+
+For g = 1 To 50
+    For h = 1 To 50
+        If InStr(Statement.Cells(g, h), "Net") > 0 Then 'Locates which column the net values are in
+            Column_Locations(5) = h
+            Exit For
+        End If
+    Next h
+Next g
+
+
+
+End Sub
+Private Sub Finalize()
+
+    Dim a As Long
+    Dim b As Long
+    Dim c As Long: c = -6
+    Dim d As Long
+    Dim lrow As Long
+    
+ThisWorkbook.Worksheets("QRA Sample Output").Range("G2:K100000").ClearContents
+
+For b = 7 To 11 'Loops through columnns
+lrow = ThisWorkbook.Worksheets("QRA Sample Output").Cells(Rows.Count, b - 6).End(xlUp).Row 'Finds the last row with data
+    For a = 2 To lrow 'Loops through rows
+             ThisWorkbook.Worksheets("QRA Sample Output").Cells(a, b).FormulaR1C1 = _
+            "=IF(COUNTIF('Enervus Statement Output'!C[-6],'QRA Sample Output'!RC[-6])>0,""FOUND"",""MISSING"")" 'Adds countif formula for analysis
+    Next a
+Next b
+
+Calculate
+
+'Copies/pastes values all the formulas in order to keep the timing and CPU/Memory usage of the macro to a minimum
+Columns("G:K").Select
+Selection.Copy
+Selection.PasteSpecial Paste:=xlPasteValues
+
+
+End Sub
+
+Public Function Character_Identify(QRA_Sample_Statement, x, PDFcolumn) As Integer
+
+'This Function identifies how many characters of a specified character type are found within some text and
+'then stores the number counted in the "Character_Identify" function variable
+Character_Identify = Len(QRA_Sample_Statement.Cells(x, PDFcolumn)) - Len(Application.WorksheetFunction.Substitute(QRA_Sample_Statement.Cells(x, PDFcolumn), ".", ""))
+
+End Function

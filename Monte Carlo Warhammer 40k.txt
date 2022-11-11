@@ -1,0 +1,568 @@
+Sub Main()
+
+Dim Total_Number_of_Hits As Double
+Dim Total_Number_of_Wounds As Double
+Dim Total_Number_Not_Saved As Double
+Dim Sample_Space_Results
+Dim s As Double
+
+n = Range("G3")
+
+ReDim Sample_Space_Results(0 To n - 1)
+
+For s = 0 To n - 1
+
+    Call Roll_to_Hit(Total_Number_of_Hits)
+        If Total_Number_of_Hits = 0 Then GoTo Continue
+    Call Roll_to_Wound(Total_Number_of_Hits, Total_Number_of_Wounds)
+        If Total_Number_of_Wounds = 0 Then GoTo Continue
+    Call Roll_to_Save(Total_Number_of_Wounds, Total_Number_Not_Saved)
+        If Total_Number_Not_Saved = 0 Then GoTo Continue
+
+Continue:
+    If Total_Number_of_Hits = 0 _
+            Or Total_Number_of_Wounds = 0 _
+            Or Total_Number_Not_Saved = 0 Then
+            Sample_Space_Results(s) = 0
+        Else: Sample_Space_Results(s) = Total_Number_Not_Saved
+        End If
+Next s
+
+End Sub
+
+Sub CCTx2()
+Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+
+Application.ScreenUpdating = False
+
+StartTime = Timer
+
+Call CCTa
+Call CCTb
+
+FinishTime = Timer
+
+SecondsElapsed = Round(FinishTime - StartTime, 0)
+
+Range("G7") = Round(SecondsElapsed, 0) / 60
+
+MsgBox "This code ran successfully in " & SecondsElapsed & " seconds", vbInformation
+
+End Sub
+
+Sub CCT()
+
+Dim i As Double
+Dim arr_
+Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+Dim n As Double
+
+Application.ScreenUpdating = False
+
+StartTime = Timer
+
+Columns("S:S").ClearContents
+
+n = Range("Q2")
+
+ReDim arr_(0 To n)
+
+For i = 0 To n
+    Calculate
+    arr_(i) = Range("F1")
+    ave_arr = Application.Average(arr_)
+Next i
+
+Range("E2") = ave_arr
+Range("S1:S" & n).Value = Application.Transpose(arr_)
+
+FinishTime = Timer
+
+SecondsElapsed = Round(FinishTime - StartTime, 0)
+
+Range("Q6") = Round(SecondsElapsed, 0) / 60
+
+MsgBox "This code ran successfully in " & SecondsElapsed & " seconds", vbInformation
+
+Application.ScreenUpdating = True
+
+End Sub
+Sub CCTa()
+
+Dim Hit_rolls
+Dim Wound_rolls
+Dim Save_rolls
+Dim Sample_Space_Results
+Dim i, j, k, n, s As Double
+Dim result As Double
+Dim Number_of_Attacks
+Dim Total_Number_of_Hits As Double
+Dim Total_Number_of_Wounds As Double
+Dim Total_Number_Not_Saved As Double
+Dim To_Hit As Double
+Dim To_Wound As Double
+Dim To_Save As Double
+Dim Ave_Result As Double
+Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+
+Columns("E:E").ClearContents
+
+n = Range("G3")
+Number_of_Attacks = Range("G6")
+To_Hit = Range("G8")
+To_Wound = Range("G9")
+To_Save = Range("G10")
+
+ReDim Sample_Space_Results(0 To n - 1)
+
+For s = 0 To n - 1
+
+        ReDim Hit_rolls(0 To Number_of_Attacks - 1)
+        
+            For i = 0 To Number_of_Attacks - 1
+            result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Hit Then
+                    Hit_rolls(i) = 1
+                Else
+                    Hit_rolls(i) = 0
+                End If
+            Next i
+        
+        Total_Number_of_Hits = Application.WorksheetFunction.Sum(Hit_rolls)
+        If Total_Number_of_Hits = 0 Then GoTo Continue
+        
+        ReDim Wound_rolls(0 To Total_Number_of_Hits - 1)
+        
+            For j = 0 To Total_Number_of_Hits - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Wound Then
+                    Wound_rolls(j) = 1
+                Else
+                    Wound_rolls(j) = 0
+                End If
+            Next j
+        
+        Total_Number_of_Wounds = Application.WorksheetFunction.Sum(Wound_rolls)
+        If Total_Number_of_Wounds = 0 Then GoTo Continue
+        
+        ReDim Save_rolls(0 To Total_Number_of_Wounds)
+        
+            For k = 0 To Total_Number_of_Wounds - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result <= To_Save Then
+                    Save_rolls(k) = 1
+                Else
+                    Save_rolls(k) = 0
+                End If
+            Next k
+        
+        Total_Number_Not_Saved = Application.WorksheetFunction.Sum(Save_rolls)
+        If Total_Number_Not_Saved = 0 Then GoTo Continue
+    
+Continue:
+    If Total_Number_of_Hits = 0 _
+        Or Total_Number_of_Wounds = 0 _
+        Or Total_Number_Not_Saved = 0 Then
+        Sample_Space_Results(s) = 0
+    Else: Sample_Space_Results(s) = Total_Number_Not_Saved
+    End If
+    
+Next s
+
+Range("E1:E" & n).Value = Application.Transpose(Sample_Space_Results)
+Ave_Result = Application.Average(Sample_Space_Results)
+Range("G11") = Ave_Result
+
+End Sub
+
+Sub CCTb()
+
+Dim Hit_rolls
+Dim Wound_rolls
+Dim Save_rolls
+Dim Sample_Space_Results
+Dim i, j, k, n, s As Double
+Dim result As Double
+Dim Number_of_Attacks
+Dim Total_Number_of_Hits As Double
+Dim Total_Number_of_Wounds As Double
+Dim Total_Number_Not_Saved As Double
+Dim To_Hit As Double
+Dim To_Wound As Double
+Dim To_Save As Double
+Dim Ave_Result As Double
+Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+
+Columns("K:K").ClearContents
+
+n = Range("J3")
+Number_of_Attacks = Range("J6")
+To_Hit = Range("J8")
+To_Wound = Range("J9")
+To_Save = Range("J10")
+
+ReDim Sample_Space_Results(0 To n - 1)
+
+For s = 0 To n - 1
+
+        ReDim Hit_rolls(0 To Number_of_Attacks - 1)
+        
+            For i = 0 To Number_of_Attacks - 1
+            result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Hit Then
+                    Hit_rolls(i) = 1
+                Else
+                    Hit_rolls(i) = 0
+                End If
+            Next i
+        
+        Total_Number_of_Hits = Application.WorksheetFunction.Sum(Hit_rolls)
+        If Total_Number_of_Hits = 0 Then GoTo Continue
+        
+        ReDim Wound_rolls(0 To Total_Number_of_Hits - 1)
+        
+            For j = 0 To Total_Number_of_Hits - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Wound Then
+                    Wound_rolls(j) = 1
+                Else
+                    Wound_rolls(j) = 0
+                End If
+            Next j
+        
+        Total_Number_of_Wounds = Application.WorksheetFunction.Sum(Wound_rolls)
+        If Total_Number_of_Wounds = 0 Then GoTo Continue
+        
+        ReDim Save_rolls(0 To Total_Number_of_Wounds)
+        
+            For k = 0 To Total_Number_of_Wounds - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result <= To_Save Then
+                    Save_rolls(k) = 1
+                Else
+                    Save_rolls(k) = 0
+                End If
+            Next k
+        
+        Total_Number_Not_Saved = Application.WorksheetFunction.Sum(Save_rolls)
+        If Total_Number_Not_Saved = 0 Then GoTo Continue
+    
+Continue:
+    If Total_Number_of_Hits = 0 _
+        Or Total_Number_of_Wounds = 0 _
+        Or Total_Number_Not_Saved = 0 Then
+        Sample_Space_Results(s) = 0
+    Else: Sample_Space_Results(s) = Total_Number_Not_Saved
+    End If
+    
+Next s
+
+Range("K1:K" & n).Value = Application.Transpose(Sample_Space_Results)
+Ave_Result = Application.Average(Sample_Space_Results)
+Range("J11") = Ave_Result
+
+End Sub
+
+Sub CCT_Single()
+
+Dim Hit_rolls
+Dim Wound_rolls
+Dim Save_rolls
+Dim Sample_Space_Results
+Dim i, j, k, n, s As Double
+Dim result As Double
+Dim Number_of_Attacks
+Dim Total_Number_of_Hits As Double
+Dim Total_Number_of_Wounds As Double
+Dim Total_Number_Not_Saved As Double
+Dim To_Hit As Double
+Dim To_Wound As Double
+Dim To_Save As Double
+Dim Ave_Result As Double
+Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+
+Application.ScreenUpdating = False
+
+Columns("E:E").ClearContents
+
+StartTime = Timer
+
+n = Range("G3")
+Number_of_Attacks = Range("G6")
+To_Hit = Range("G8")
+To_Wound = Range("G9")
+To_Save = Range("G10")
+
+ReDim Sample_Space_Results(0 To n - 1)
+
+For s = 0 To n - 1
+
+        ReDim Hit_rolls(0 To Number_of_Attacks - 1)
+        
+            For i = 0 To Number_of_Attacks - 1
+            result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Hit Then
+                    Hit_rolls(i) = 1
+                Else
+                    Hit_rolls(i) = 0
+                End If
+            Next i
+        
+        Total_Number_of_Hits = Application.WorksheetFunction.Sum(Hit_rolls)
+        If Total_Number_of_Hits = 0 Then GoTo Continue
+        
+        ReDim Wound_rolls(0 To Total_Number_of_Hits - 1)
+        
+            For j = 0 To Total_Number_of_Hits - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Wound Then
+                    Wound_rolls(j) = 1
+                Else
+                    Wound_rolls(j) = 0
+                End If
+            Next j
+        
+        Total_Number_of_Wounds = Application.WorksheetFunction.Sum(Wound_rolls)
+        If Total_Number_of_Wounds = 0 Then GoTo Continue
+        
+        ReDim Save_rolls(0 To Total_Number_of_Wounds)
+        
+            For k = 0 To Total_Number_of_Wounds - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result <= To_Save Then
+                    Save_rolls(k) = 1
+                Else
+                    Save_rolls(k) = 0
+                End If
+            Next k
+        
+        Total_Number_Not_Saved = Application.WorksheetFunction.Sum(Save_rolls)
+        If Total_Number_Not_Saved = 0 Then GoTo Continue
+    
+Continue:
+    If Total_Number_of_Hits = 0 _
+        Or Total_Number_of_Wounds = 0 _
+        Or Total_Number_Not_Saved = 0 Then
+        Sample_Space_Results(s) = 0
+    Else: Sample_Space_Results(s) = Total_Number_Not_Saved
+    End If
+    
+Next s
+
+Range("E1:E" & n).Value = Application.Transpose(Sample_Space_Results)
+Ave_Result = Application.Average(Sample_Space_Results)
+Range("G11") = Ave_Result
+
+FinishTime = Timer
+
+SecondsElapsed = Round(FinishTime - StartTime, 0)
+
+Range("G7") = Round(SecondsElapsed, 0) / 60
+
+MsgBox "This code ran successfully in " & SecondsElapsed & " seconds", vbInformation
+
+Application.ScreenUpdating = True
+
+End Sub
+
+Sub Roll_to_Hit(Total_Number_of_Hits)
+
+Dim Hit_rolls
+Dim i As Double
+Dim result As Double
+Dim Number_of_Attacks
+Dim To_Hit As Double
+
+Number_of_Attacks = Range("G6")
+To_Hit = Range("G8")
+
+        ReDim Hit_rolls(0 To Number_of_Attacks - 1)
+        
+            For i = 0 To Number_of_Attacks - 1
+            result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Hit Then
+                    Hit_rolls(i) = 1
+                Else
+                    Hit_rolls(i) = 0
+                End If
+            Next i
+        
+        Total_Number_of_Hits = Application.WorksheetFunction.Sum(Hit_rolls)
+
+End Sub
+
+Sub Roll_to_Wound(ByVal Total_Number_of_Hits As Double, Total_Number_of_Wounds)
+
+Dim Wound_rolls
+Dim j As Double
+Dim result As Double
+
+Dim To_Wound As Double
+
+To_Wound = Range("G9")
+        
+        ReDim Wound_rolls(0 To Total_Number_of_Hits - 1)
+        
+            For j = 0 To Total_Number_of_Hits - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Wound Then
+                    Wound_rolls(j) = 1
+                Else
+                    Wound_rolls(j) = 0
+                End If
+            Next j
+        
+        Total_Number_of_Wounds = Application.WorksheetFunction.Sum(Wound_rolls)
+
+End Sub
+
+Sub CCT_ReRollHits()
+
+Dim Hit_rolls
+Dim Wound_rolls
+Dim Save_rolls
+Dim ReRolls
+Dim Sample_Space_Results
+Dim i, j, k, n, s, m As Double
+Dim result As Double
+Dim Number_of_Attacks
+Dim Total_Number_of_Hits As Double
+Dim Total_Number_of_Wounds As Double
+Dim Total_Number_Not_Saved As Double
+Dim Total_ReRolls As Double
+Dim To_Hit As Double
+Dim To_Wound As Double
+Dim To_Save As Double
+Dim Ave_Result As Double
+Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+
+Application.ScreenUpdating = False
+
+Columns("E:E").ClearContents
+
+StartTime = Timer
+
+n = Range("G3")
+Number_of_Attacks = Range("G6")
+To_Hit = Range("G8")
+To_Wound = Range("G9")
+To_Save = Range("G10")
+
+ReDim Sample_Space_Results(0 To n - 1)
+
+For s = 0 To n - 1
+
+        ReDim Hit_rolls(0 To Number_of_Attacks - 1)
+        ReDim ReRolls(0 To Number_of_Attacks - 1)
+        
+            For i = 0 To Number_of_Attacks - 1
+            result = Application.WorksheetFunction.RandBetween(1, 6)
+            Select Case result
+                Case Is >= To_Hit
+                    Hit_rolls(i) = 1
+                Case Is = 1
+                    ReRolls(i) = 1
+                Case Else
+                    Hit_rolls(i) = 0
+                End Select
+            Next i
+            
+            Total_ReRolls = Application.WorksheetFunction.Sum(ReRolls)
+            
+            If Total_ReRolls = 0 Then GoTo Skip_ReRolls
+            
+            ReDim ReRolls(0 To Total_ReRolls - 1)
+            
+            For m = 0 To Total_ReRolls - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Hit Then
+                    ReRolls(m) = 1
+                Else
+                    ReRolls(m) = 0
+                End If
+            Next m
+        
+Skip_ReRolls:
+        
+        Total_Number_of_Hits = Application.WorksheetFunction.Sum(Hit_rolls) + _
+                               Application.WorksheetFunction.Sum(ReRolls)
+                                
+        If Total_Number_of_Hits = 0 Then GoTo Continue
+        
+        ReDim Wound_rolls(0 To Total_Number_of_Hits - 1)
+        
+            For j = 0 To Total_Number_of_Hits - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result >= To_Wound Then
+                    Wound_rolls(j) = 1
+                Else
+                    Wound_rolls(j) = 0
+                End If
+            Next j
+        
+        Total_Number_of_Wounds = Application.WorksheetFunction.Sum(Wound_rolls)
+        If Total_Number_of_Wounds = 0 Then GoTo Continue
+        
+        ReDim Save_rolls(0 To Total_Number_of_Wounds)
+        
+            For k = 0 To Total_Number_of_Wounds - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result <= To_Save Then
+                    Save_rolls(k) = 1
+                Else
+                    Save_rolls(k) = 0
+                End If
+            Next k
+        
+        Total_Number_Not_Saved = Application.WorksheetFunction.Sum(Save_rolls)
+        If Total_Number_Not_Saved = 0 Then GoTo Continue
+    
+Continue:
+    If Total_Number_of_Hits = 0 _
+        Or Total_Number_of_Wounds = 0 _
+        Or Total_Number_Not_Saved = 0 Then
+        Sample_Space_Results(s) = 0
+    Else: Sample_Space_Results(s) = Total_Number_Not_Saved
+    End If
+    
+Next s
+
+Range("E1:E" & n).Value = Application.Transpose(Sample_Space_Results)
+Ave_Result = Application.Average(Sample_Space_Results)
+Range("G11") = Ave_Result
+
+FinishTime = Timer
+
+SecondsElapsed = Round(FinishTime - StartTime, 0)
+
+Range("G7") = Round(SecondsElapsed, 0) / 60
+
+MsgBox "This code ran successfully in " & SecondsElapsed & " seconds", vbInformation
+
+Application.ScreenUpdating = True
+
+End Sub
+
+Sub Roll_to_Save(ByVal Total_Number_of_Wounds As Double, Total_Number_Not_Saved)
+
+Dim Save_rolls
+Dim k As Double
+Dim result As Double
+Dim To_Save As Double
+
+To_Save = Range("G10")
+        
+        ReDim Save_rolls(0 To Total_Number_of_Wounds - 1)
+        
+            For k = 0 To Total_Number_of_Wounds - 1
+                result = Application.WorksheetFunction.RandBetween(1, 6)
+                If result <= To_Save Then
+                    Save_rolls(k) = 1
+                Else
+                    Save_rolls(k) = 0
+                End If
+            Next k
+        
+        Total_Number_Not_Saved = Application.WorksheetFunction.Sum(Save_rolls)
+
+End Sub
