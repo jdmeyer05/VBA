@@ -1,2 +1,2 @@
 # VBA-Code
-All Excel VBA Code
+Excel VBA Code
