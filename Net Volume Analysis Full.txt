@@ -1,0 +1,1413 @@
+Option Explicit
+Dim conn As ADODB.Connection
+Dim rst As ADODB.Recordset
+Dim cmd As ADODB.Command
+Dim Server_Name As String
+Dim strUserName As String
+Dim strPassword As String
+Dim strConn As String
+Dim NetVols As Workbook
+
+Sub NetVolCompareGet()
+
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+
+    Dim combined As Worksheet, Accrual As Worksheet, EDD As Worksheet
+    Dim Pivot As Worksheet, comparison As Worksheet, Research As Worksheet, ws As Worksheet
+    Dim wbkEDDFile As Workbook
+    Dim wbkAccrualfile As Workbook
+    ' Do not adjust the below line of code for any reason. This file name must stay as show below.
+    Dim strEDDFileName As String: strEDDFileName = "JBB Accrual EDD Vols DWTEST No 0s & No Ns - Fund III SA Removed"
+    Dim i As Long
+    Dim S As Shapes
+    Dim LR As Long
+    Dim StartTime As Double, SecondsElapsed As Double, FinishTime As Double
+    Dim answer
+    
+    Set combined = ThisWorkbook.Worksheets("Combined Data from EDD & ACCR")
+    Set Pivot = ThisWorkbook.Worksheets("Combined Data Pivot")
+    Set comparison = ThisWorkbook.Worksheets("Net Vol Comparison")
+    Set Research = ThisWorkbook.Worksheets("Wells Needing Research")
+    Set NetVols = ThisWorkbook
+    Dim UpperCriteria As Long: UpperCriteria = comparison.Range("G3").Value
+    Dim LowerCriteria As Long: LowerCriteria = UpperCriteria * -1
+
+StartTime = Timer
+
+'Clears out previous data
+Research.Range("a2:qq200000").ClearContents
+comparison.Range("A34:q250000").Clear
+combined.Range("a2:P200000").ClearContents
+combined.Range("a2:g200000").ClearContents
+Research.Buttons.Delete
+
+'Updates the Number of Days in the Month
+With comparison.Range("b1")
+    .FormulaR1C1 = "=DAY(EOMONTH(TODAY(),-1))"
+    .Copy
+    .PasteSpecial xlPasteValues
+    .Application.CutCopyMode = False
+End With
+
+'Shows all data on all sheets
+For Each ws In ThisWorkbook.Worksheets
+    With ws
+        If .Visible Then
+            If (.AutoFilterMode And .FilterMode) Or .FilterMode Then
+              .ShowAllData
+            End If
+        End If
+    End With
+Next ws
+
+'Collects the needed EDD data
+Call EDD_DataGet(combined, strEDDFileName, wbkEDDFile, LR)
+
+'Collects the needed Accrual data
+Call Run_Report_Accrual_Vols(combined)
+    
+'Text to columns the RC Names so they are the correct format
+For i = 1 To 4
+    With combined
+        .Columns(i).TextToColumns DataType:=xlDelimited, _
+        TextQualifier:=xlDoubleQuote, ConsecutiveDelimiter:=False, Tab:=True, _
+        Semicolon:=False, Comma:=False, Space:=False, Other:=False, FieldInfo _
+        :=Array(1, 1), TrailingMinusNumbers:=True
+    End With
+Next i
+
+'PIVOT DATA GET
+
+'LR = Pivot.Range("A" & Rows.count).End(xlUp).Row
+'Selects and Copies pivot table data
+With Pivot
+    .PivotTables("PivotTable1").ClearAllFilters
+    .PivotTables("PivotTable1").PivotCache.Refresh
+    .PivotTables("PivotTable1").PivotFields("UNIT NAME ").PivotItems("(blank)").Visible = False
+    .PivotTables("PivotTable1").PivotFields("TABLE").PivotItems("(blank)").Visible = False
+    LR = Pivot.Range("A" & Rows.count).End(xlUp).Row
+    .Range("A5:H" & LR).Copy
+End With
+
+'----------------------------------------------------------------------------------------------------
+
+'COMPARISON TABLE CREATE
+
+'Pastes pivot table data into the Comparison sheet
+
+With comparison
+    .Activate
+    .Rows("34:34").Select
+     ActiveWindow.FreezePanes = True
+    .Range("a34").PasteSpecial Paste:=xlPasteValues
+End With
+
+LR = comparison.Range("A" & Rows.count).End(xlUp).Row
+
+With comparison
+    'Add VAR BOE calc for each line
+    .Range("I34:I" & LR).Value = "=ABS(IF(RC[-6]=""G"",RC[-1]/R1C2/6,RC[-1]/R1C2))"
+    'Add ACCRUAL BOE calc for each line
+    .Range("J34:J" & LR).Value = "=IF(RC[-7]=""G"",RC[-4]/R1C2/6,RC[-4]/R1C2)"
+    'Add EDD BOE calc for each line
+    .Range("K34:K" & LR).Value = "=IF(RC[-8]=""G"",RC[-4]/R1C2/6,RC[-4]/R1C2)"
+    'Add ACQ descripton for each line
+    .Range("M34:M" & LR).Value = "=VLOOKUP(RC[-11],'[" & strEDDFileName & ".xlsx" & "]Detail'!C6:C8,3,FALSE)"
+    'Add FUND descripton for each line
+    .Range("L34:L" & LR).Value = "=VLOOKUP(RC[+1],'Fund Split'!C1:C2,2,FALSE)"
+    'Add State descripton for each line
+    .Range("n34:N" & LR).Value = "=IFERROR(VLOOKUP(RC[-12],'[" & strEDDFileName & ".xlsx" & "]Detail'!C6:C12,7,FALSE),"""")"
+    'Add Comments descripton for each line
+    .Range("o34:P" & LR).Value = "=IFERROR(VLOOKUP(RC[-13]&RC[-11],'Previous Comments'!C[-14]:C[-3],12,FALSE),"""")"
+    'Paste BOE calc's as values
+    .Range("i34:O" & LR).Copy
+    .Range("i34:O" & LR).PasteSpecial xlPasteValues
+    'Formats columns E:J as "Comma"
+    .Range("F34:K" & LR).Style = "Comma"
+End With
+
+'Applies the conditional formatting that highlights BOE/d
+    Range("I34").Select
+    Range(Selection, Selection.End(xlDown)).Select
+    Selection.FormatConditions.Add Type:=xlCellValue, Operator:=xlGreater, _
+        Formula1:="=" & UpperCriteria
+        
+    Selection.FormatConditions(Selection.FormatConditions.count).SetFirstPriority
+    With Selection.FormatConditions(1).Font
+        .Color = -16383844
+        .TintAndShade = 0
+    End With
+    With Selection.FormatConditions(1).Interior
+        .PatternColorIndex = xlAutomatic
+        .Color = 13551615
+        .TintAndShade = 0
+    End With
+    Selection.FormatConditions(1).StopIfTrue = False
+    Selection.FormatConditions.Add Type:=xlCellValue, Operator:=xlLess, _
+        Formula1:="=" & LowerCriteria
+        
+    Selection.FormatConditions(Selection.FormatConditions.count).SetFirstPriority
+    With Selection.FormatConditions(1).Font
+        .Color = -16383844
+        .TintAndShade = 0
+    End With
+    With Selection.FormatConditions(1).Interior
+        .PatternColorIndex = xlAutomatic
+        .Color = 13551615
+        .TintAndShade = 0
+    End With
+    Selection.FormatConditions(1).StopIfTrue = False
+
+LR = comparison.Cells(Rows.count, "A").End(xlUp).Row
+
+'Filters on large variances
+comparison.Activate
+comparison.Range("A33:H" & LR).AutoFilter Field:=9, Criteria1:=RGB(255 _
+        , 199, 206), Operator:=xlFilterCellColor
+Range("A33:O" & LR).Copy
+
+'Go to Research tab with copied data and paste values; Then sort on BOE
+Research.Activate
+Research.Range("B1").PasteSpecial Paste:=xlPasteValues
+Application.CutCopyMode = False
+Columns("C:C").TextToColumns Tab:=True
+ActiveWorkbook.Worksheets("Wells Needing Research").AutoFilter.Sort.SortFields. _
+        Clear
+Research.AutoFilter.Sort.SortFields. _
+    Add Key:=Range("J1:J19"), SortOn:=xlSortOnValues, Order:=xlDescending, _
+    DataOption:=xlSortNormal
+With Research.AutoFilter.Sort
+    .Header = xlYes
+    .MatchCase = False
+    .Orientation = xlTopToBottom
+    .SortMethod = xlPinYin
+    .Apply
+End With
+
+Research.AutoFilter.Sort.SortFields. _
+        Add Key:=Range("M1:M3410"), SortOn:=xlSortOnValues, Order:=xlAscending, _
+        DataOption:=xlSortNormal
+With Research.AutoFilter.Sort
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+End With
+
+Research.Columns("G:L").Style = "Comma"
+
+'Shows all data on all sheets
+For Each ws In ThisWorkbook.Worksheets
+    With ws
+        If .Visible Then
+            .Activate
+            ActiveWindow.ScrollRow = 1
+        End If
+    End With
+Next ws
+
+Dim UpdatePivot As PivotTable
+For Each ws In ThisWorkbook.Worksheets
+    For Each UpdatePivot In ws.PivotTables
+        UpdatePivot.RefreshTable
+        UpdatePivot.Update
+    Next
+Next
+
+Call Non_Op_Wells
+
+Research.Activate
+
+Call Add_Analysis_Buttons(Research)
+
+wbkEDDFile.Close savechanges:=True
+
+SecondsElapsed = Round(Timer - StartTime, 2)
+
+Application.DisplayAlerts = True
+
+MsgBox "This code ran successfully in " & SecondsElapsed & " seconds", vbInformation
+
+Application.ScreenUpdating = True
+
+
+End Sub
+
+Sub EDD_DataGet(combined As Worksheet, strEDDFileName As String, ByRef wbkEDDFile As Workbook, LR)
+
+    Dim strMonth As String
+    Dim strYear As String
+    Dim strEDDFilePath As String
+    
+    strYear = ThisWorkbook.Worksheets("Net Vol Comparison").Range("C3").Value
+    strMonth = ThisWorkbook.Worksheets("Net Vol Comparison").Range("C4").Value
+    
+    
+    strEDDFilePath = "S:\Private\Revenue\Revenue Analysis\" & strYear & "\" & strMonth & "\PROD INFO\" & strEDDFileName & ".xlsx"
+    
+    ChDir "S:\Private\Revenue\Revenue Analysis\" & strYear & "\" & strMonth & "\PROD INFO"
+    Set wbkEDDFile = Workbooks.Open(Filename:=strEDDFilePath)  ' Opens file and sets variable
+
+'Shows all data on all sheets
+With wbkEDDFile.Sheets(1)
+    If (.AutoFilterMode And .FilterMode) Or .FilterMode Then
+              .ShowAllData
+    End If
+    .Cells.Copy
+    .Cells.PasteSpecial xlPasteValues
+End With
+Application.CutCopyMode = False
+
+wbkEDDFile.Sheets(1).Columns(6).TextToColumns Tab:=True
+          
+Call EDD_DIST_CHANGE(LR)
+
+LR = wbkEDDFile.Sheets(1).Cells(Rows.count, "A").End(xlUp).Row
+
+'Grabs the RC #\Unit Name\Operated\Product\Disposition\Volume from EDD and Pastes into Combined Tab
+With wbkEDDFile.Sheets(1)
+    .Range("E6:E" & LR).Copy Destination:=combined.Range("A2")
+    .Range("F6:F" & LR).Copy Destination:=combined.Range("B2")
+    .Range("P6:P" & LR).Copy Destination:=combined.Range("C2")
+    .Range("W6:W" & LR).Copy Destination:=combined.Range("D2")
+    .Range("K6:K" & LR).Copy Destination:=combined.Range("E2")
+    .Range("U6:U" & LR).Copy Destination:=combined.Range("F2")
+End With
+
+LR = combined.Cells(Rows.count, "A").End(xlUp).Row
+
+With combined
+    .Activate
+'    'Sets the NET VOL for EDD data equal to the Original Vol   //Changed on 11-23-2020//
+'    .Range(Cells(2, 7), Cells(LR, 7)) = "=RC[-1]"
+    'Add EDD as a description for each line                     //Changed on 11-23-2020//
+    .Range(Cells(2, 7), Cells(LR, 7)) = "EDD"
+End With
+
+End Sub
+
+Sub EDD_DIST_CHANGE(LR)
+
+LR = (ActiveSheet.Cells(Rows.count, "A").End(xlUp).Row)
+
+With Range("W4:W" & LR)
+    .Value = "=RC[-7]&RC[-6]"
+    .Copy
+    .PasteSpecial Paste:=xlPasteValues
+End With
+Application.CutCopyMode = False
+
+Range("W4:W" & LR).Replace what:="ODRIP", Replacement:="ODRSA"
+
+End Sub
+
+Sub Agreement_Add(wbkAccrualfile, Research)
+
+'----------------------------------------------------------------------------------------------------------------------------------
+'This section adds the Agreement Name for each RC that needs research via a 2d array vlookup
+'----------------------------------------------------------------------------------------------------------------------------------
+    Dim array_() As Variant
+    Dim count As Integer
+    Dim x As Integer
+    Dim j As Integer
+    Dim lookupvalue As Variant
+    Dim vlookup
+
+wbkAccrualfile.Activate
+
+count = wbkAccrualfile.Sheets(1).Cells(Rows.count, "A").End(xlUp).Row
+
+j = 6
+
+ReDim array_(0 To count, 2) As Variant
+
+For x = LBound(array_) To UBound(array_)
+    array_(x, 0) = Cells(j, 1) & Cells(j, 3) & Cells(j, 10)
+    array_(x, 1) = Cells(j, 19)
+    array_(x, 2) = Cells(j, 20)
+    j = j + 1
+Next x
+
+count = Research.Range("A5").CurrentRegion.Rows.count
+
+Research.Activate
+Range("p1").Value = "Agreement"
+For x = 2 To count
+    vlookup = ""
+    On Error Resume Next
+    lookupvalue = Cells(x, 2) & Cells(x, 5) & Cells(x, 4)
+    vlookup = Application.WorksheetFunction.vlookup(lookupvalue, array_, 2, False)
+    Cells(x, 16).Value = vlookup
+Next x
+
+Range("q1").Value = "SEQ"
+For x = 2 To count
+    vlookup = ""
+    On Error Resume Next
+    lookupvalue = Cells(x, 2) & Cells(x, 5) & Cells(x, 4)
+    vlookup = Application.WorksheetFunction.vlookup(lookupvalue, array_, 3, False)
+    Cells(x, 17).Value = vlookup
+Next x
+End Sub
+
+
+
+Public Function IsInArray(RC_Number As String, arr As Variant, ByVal y As Long) As Boolean
+'#### ADDED 4/30/2019 ####
+    
+    Dim i
+    
+For i = 0 To y
+    If arr(14, i) = RC_Number Then
+        IsInArray = True
+        Exit Function
+    End If
+Next i
+IsInArray = False
+    
+End Function
+
+Private Sub Run_Report_Accrual_Vols(ByRef combined As Worksheet)
+
+'//Added on 11-23-2020//
+
+Dim Server_Name As String
+Dim SQL_Statement_1 As String
+Dim SQL_Statement_2 As String
+Dim strUserName As String: strUserName = "APPSV"
+Dim strPassword As String: strPassword = "APPSV"
+
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+Server_Name = "SHERIP"
+
+'SQL_Statement_1 = "SELECT * FROM EB.EB_AGREEMENT_DETAIL_PRICES"
+
+Call Connect_To_SQLServer(Server_Name, SQL_Statement_1, SQL_Statement_2, strUserName, strPassword, combined)
+
+End Sub
+
+Sub Connect_To_SQLServer(ByVal Server_Name As String, _
+ByVal SQL_Statement_1 As String, ByVal SQL_Statement_2 As String, _
+ByVal strPassword As String, ByVal strUserName As String, ByRef combined As Worksheet)
+
+Dim strConn As String
+Dim wsPriceData As Worksheet
+Dim col As Integer
+Dim LR As Long
+Dim LR2 As Long
+Dim strPlaceHolder As String
+Dim wsCode As Worksheet
+Dim i As Long
+Dim Current_Month As Date
+Dim Prior_Month As Date
+Dim SQL_Statement_3 As String
+Dim wsUnprocess As Worksheet
+Dim SQL_Statement_4 As String
+Dim wsAVAT As Worksheet
+
+Set wsPriceData = ThisWorkbook.Worksheets("Price Summary Data")
+Set wsCode = ThisWorkbook.Worksheets("SQL Code")
+Set wsUnprocess = ThisWorkbook.Worksheets("Unprocessed Volumes")
+Set wsAVAT = ThisWorkbook.Worksheets("MoM Missing Wells")
+
+' Grabs the first set of SQL code to be run for the Accrual Transaction net volumes
+LR2 = combined.Cells(Rows.count, "A").End(xlUp).Row + 1
+LR = ThisWorkbook.Worksheets("SQL Code").Range("A" & Rows.count).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 1).Value & " "
+    SQL_Statement_1 = SQL_Statement_1 & strPlaceHolder
+Next i
+
+' Grabs the second set of SQL code to be run for the Price Summary
+LR = ThisWorkbook.Worksheets("SQL Code").Range("B" & Rows.count).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 2).Value & " "
+    SQL_Statement_2 = SQL_Statement_2 & strPlaceHolder
+Next i
+
+' Open connection to server & database
+strConn = "Provider=OraOLEDB.Oracle;" & _
+    "Data Source=" & Server_Name & ";" & _
+    "User ID=" & strUserName & ";" & _
+    "Password=" & strPassword & ";"
+
+
+'--------------------FIRST SQL QUERY START------------------------
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement_1
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement_1
+End With
+    
+combined.Range("A" & LR2).CopyFromRecordset Data:=rst
+
+'Add ACCRUAL as a description for each line
+LR = combined.Cells(Rows.count, "A").End(xlUp).Row
+With combined
+    .Activate
+    .Range(Cells(LR2, 7), Cells(LR, 7)) = "ACCRUAL"
+    .Cells.ClearFormats
+End With
+'--------------------FIRST SQL QUERY END------------------------
+
+
+
+Call Close_Objects
+
+
+
+'--------------------SECOND SQL QUERY START------------------------
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement_2
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement_2
+End With
+
+With wsPriceData
+    
+    .Cells.Clear
+    
+    For col = 0 To rst.Fields.count - 1
+        .Cells(1, col + 1).Value = rst.Fields(col).Name
+    Next col
+    
+    .Range("A2").CopyFromRecordset Data:=rst
+    
+End With
+
+Current_Month = ThisWorkbook.Worksheets("Net Vol Comparison").Range("C5").Value
+Prior_Month = ThisWorkbook.Worksheets("Net Vol Comparison").Range("D5").Value
+
+With ThisWorkbook.Worksheets("Price Summary Pivot")
+    .PivotTables("PivotTable4").RefreshTable
+    .PivotTables("PivotTable5").RefreshTable
+    .PivotTables("PivotTable4").PivotFields("ACCOUNTING_DATE").ClearAllFilters
+    .PivotTables("PivotTable5").PivotFields("ACCOUNTING_DATE").ClearAllFilters
+    .PivotTables("PivotTable4").PivotFields("ACCOUNTING_DATE").CurrentPage = (Current_Month)
+    .PivotTables("PivotTable5").PivotFields("ACCOUNTING_DATE").CurrentPage = (Prior_Month)
+End With
+
+'--------------------SECOND SQL QUERY FINISH------------------------
+
+Call Close_Objects
+
+'--------------------THIRD SQL QUERY START------------------------
+' Grabs the first set of SQL code to be run for the Accrual Transaction net volumes
+
+LR = ThisWorkbook.Worksheets("SQL Code").Range("C" & Rows.count).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 3).Value & " "
+    SQL_Statement_3 = SQL_Statement_3 & strPlaceHolder
+Next i
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement_3
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement_3
+End With
+
+With wsUnprocess
+    
+    .Cells.ClearContents
+    
+    For col = 0 To rst.Fields.count - 1
+        .Cells(1, col + 1).Value = rst.Fields(col).Name
+    Next col
+    
+    .Range("A2").CopyFromRecordset Data:=rst
+    
+End With
+
+LR = ThisWorkbook.Worksheets("Unprocessed Volumes").Range("A" & Rows.count).End(xlUp).Row
+
+If Not ThisWorkbook.Worksheets("Unprocessed Volumes").AutoFilterMode Then
+  ThisWorkbook.Worksheets("Unprocessed Volumes").Range("A1").AutoFilter
+End If
+
+ThisWorkbook.Worksheets("Unprocessed Volumes").AutoFilter.Sort.SortFields. _
+        Add Key:=Range("N1:N" & LR), SortOn:=xlSortOnValues, Order:=xlDescending, _
+        DataOption:=xlSortNormal
+With ThisWorkbook.Worksheets("Unprocessed Volumes").AutoFilter.Sort
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+End With
+
+'--------------------THIRD SQL QUERY FINISH------------------------
+
+Call Close_Objects
+
+'--------------------FOURTH SQL QUERY START------------------------
+
+' Grabs the first set of SQL code to be run for comparing volumes month over month and determines is a well is missing volumes
+' based on the criteria RC + Product + Disposition which is used as the unique identifier. The first part of this sub executes
+' a SQL query to grab data from the Accrual Volume Adjustment Table in EU on the basis of current month and previous month.
+' The subroutine then places the previous months data into a array called arrPre_Month and the current months data into an
+' called arrCurr_Month. The subroutine then check each of the unique identifiers from the arrPre_Month against all the unique
+' identifiers in arrCurr_Month and if the unique identifier is not found the subroutine places all the data for that line
+' in the arrCurrentMonthMissing array. Once this process checks all the unique identifiers for existence in the current month
+' the subroutine then moves the arrCurrentMonthMissing array data to the MoM Missing Wells worksheet. It then sorts the table
+' from highest missing BOE/d to lowest.
+
+LR = ThisWorkbook.Worksheets("SQL Code").Range("D" & Rows.count).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 4).Value & " "
+    SQL_Statement_4 = SQL_Statement_4 & strPlaceHolder
+Next i
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement_4
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement_4
+End With
+
+With wsAVAT
+    
+    .Range("A1:L500000").ClearContents
+    
+    For col = 0 To rst.Fields.count - 1
+        .Cells(1, col + 1).Value = rst.Fields(col).Name
+    Next col
+    
+    .Range("A2").CopyFromRecordset Data:=rst
+    
+End With
+
+i = 4
+
+LR = ThisWorkbook.Worksheets("MoM Missing Wells").Range("A" & Rows.count).End(xlUp).Row
+
+    Dim arrPre_Month As Variant
+    Dim arrCurr_Month As Variant
+    Dim arrCurrentMonthMissing As Variant
+    Dim j As Long
+    Dim k As Long
+    Dim x As Long: x = 0
+    Dim y As Long: y = 0
+    Dim z As Long: z = 0
+    Dim RC_Number As String
+    
+ReDim arrPre_Month(0 To 14, 0 To x)
+ReDim arrCurr_Month(0 To 14, 0 To y)
+    
+For i = 4 To LR
+    
+    If ThisWorkbook.Worksheets("MoM Missing Wells").Cells(i, 3) = ThisWorkbook.Worksheets("Net Vol Comparison").Range("D6") Then
+        j = 0
+        For j = 0 To 14
+            arrPre_Month(j, x) = ThisWorkbook.Worksheets("MoM Missing Wells").Cells(i, j + 1)
+        Next j
+        arrPre_Month(14, x) = arrPre_Month(1, x) & arrPre_Month(6, x) & arrPre_Month(7, x)
+        x = x + 1
+        ReDim Preserve arrPre_Month(0 To 14, 0 To x) 'You can only preserve the higher dimention of a 2D array
+    
+    ElseIf ThisWorkbook.Worksheets("MoM Missing Wells").Cells(i, 3) = ThisWorkbook.Worksheets("Net Vol Comparison").Range("C6") Then
+        j = 0
+        For j = 0 To 14
+            arrCurr_Month(j, y) = ThisWorkbook.Worksheets("MoM Missing Wells").Cells(i, j + 1).Value
+        Next j
+        arrCurr_Month(14, y) = arrCurr_Month(1, y) & arrCurr_Month(6, y) & arrCurr_Month(7, y)
+        y = y + 1
+        ReDim Preserve arrCurr_Month(0 To 14, 0 To y) 'You can only preserve the higher dimention of a 2D array
+    End If
+Next i
+
+ReDim Preserve arrPre_Month(0 To 14, 0 To x - 1)
+ReDim Preserve arrCurr_Month(0 To 14, 0 To y - 1)
+ReDim arrCurrentMonthMissing(0 To 14, 0 To z)
+    
+i = 0 'Initalizes variable to loop through previous month array
+j = 0 'Initializes variable to loop through current month 2nd dimension
+k = 0 'Initializes variable to loop through 1st dimension of missing month array and previous month array
+z = 0 'Initializes variable to loop interate which row the information is to be stored at in the missing month array
+
+' Loops through each ID and passes it to function "IsInArray" to return a True or False value depending on if there was a match or not
+For i = 0 To y
+    On Error Resume Next
+    RC_Number = arrPre_Month(14, i)                  ' Sets up the ID variable that gets passed to the function.
+    If IsInArray(RC_Number, arrCurr_Month, y) = False Then
+        For j = 0 To 14
+            arrCurrentMonthMissing(j, z) = arrPre_Month(j, i)     ' Loads up arrCurrentMonthMissing array with all row data for missing well.
+        Next j
+        z = z + 1
+        ReDim Preserve arrCurrentMonthMissing(0 To 14, 0 To z)
+    End If
+Next i
+
+ThisWorkbook.Worksheets("MoM Missing Wells").Range("A2:L100000").ClearContents
+ThisWorkbook.Worksheets("MoM Missing Wells").Range("A2:L" & z) = Application.Transpose(arrCurrentMonthMissing)
+    
+If Not ThisWorkbook.Worksheets("MoM Missing Wells").AutoFilterMode Then
+  ThisWorkbook.Worksheets("MoM Missing Wells").Range("A1").AutoFilter
+End If
+
+' Formatting
+With ThisWorkbook.Worksheets("MoM Missing Wells")
+        .Range ("A1:L" & LR)
+        .AutoFilter.Sort. _
+        SortFields.Add Key:=Range("L1:L" & LR), SortOn:=xlSortOnValues, Order:= _
+        xlDescending, DataOption:=xlSortNormal
+    With ActiveWorkbook.Worksheets("MoM Missing Wells").AutoFilter. _
+        Sort
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+End With
+
+
+
+
+'--------------------FOURTH SQL QUERY FINISH------------------------
+
+Call Close_Objects
+
+End Sub
+
+
+Private Sub Close_Objects()
+
+If rst.State <> 0 Then rst.Close
+If conn.State <> 0 Then conn.Close
+
+'// Release Memory
+Set rst = Nothing
+Set conn = Nothing
+
+End Sub
+
+Sub Non_Op_Wells()
+
+    Dim i As Long
+    Dim j As Long: j = 0
+    Dim x As Long: x = 0
+    Dim LR As Long
+    Dim arrWells() As Variant
+    
+ReDim arrWells(0 To 8000, 0 To 6) As Variant
+
+LR = ThisWorkbook.Worksheets("Net Vol Comparison").Range("A" & Rows.count).End(xlUp).Row
+
+For i = 34 To LR
+    
+    With ThisWorkbook.Worksheets("Net Vol Comparison")
+    
+        If .Cells(i, 3) = "G" And _
+           .Cells(i, 5) = "N" Then
+           
+           For x = 0 To 6
+               arrWells(j, x) = .Cells(i, x + 1)
+           Next x
+            
+            j = j + 1
+        
+    ElseIf .Cells(i, 3) = "N" And _
+           .Cells(i, 5) = "N" Then
+            
+           For x = 0 To 6
+                arrWells(j, x) = .Cells(i, x + 1)
+           Next x
+            
+            j = j + 1
+                    
+        End If
+    End With
+Next i
+    
+With ThisWorkbook.Worksheets("Non-Op Wells")
+        .Activate
+        .Range("A2:G1000").Clear
+        .Range("A2:G801") = arrWells
+End With
+
+ThisWorkbook.Worksheets("Non-Op Wells").Range("A1:G801").Sort Key1:=Range("G1"), Order1:=xlDescending
+
+
+End Sub
+
+Sub Add_Analysis_Buttons(Research)
+
+    Dim i As Long
+    Dim x As Long: x = 1
+    Dim LR As Long
+
+LR = Research.Range("B" & Rows.count).End(xlUp).Row
+
+For i = 2 To LR
+        Research.Buttons.Add(Cells(i, x).Left, Cells(i, x).Top, Cells(i, x).Width, Cells(i, x).Height).Select
+        Selection.OnAction = "Well_Dashboard"
+        Selection.Characters.Text = Research.Cells(i, 1).Value & " Drill Down"
+Next i
+
+End Sub
+
+Sub Well_Dashboard()
+
+    Dim wkbActive As Workbook
+    Dim wsDashboard As Worksheet
+    Dim Row_Value As Long
+    Dim Col_Value As Long
+    Dim NetVols As Workbook
+    Dim Research As Worksheet
+    Dim SQL_Query As String
+    Dim RC As Long
+    Dim i As Long, j As Long
+    Dim RCName As String
+    Dim arrFull As Variant
+    Dim FSO As Object
+    Dim TmpFolder As Object
+    Dim rngOutput As Range
+    Dim arrFullT As Variant
+    Dim arrAccTrans As Variant
+    Dim arrDOI As Variant
+    Dim tbl As ListObject
+    Dim rng As Range
+    Dim wsActuals As Worksheet
+    Dim arrNames: arrNames = Array("Well Name:", _
+                                   "Well Number:", _
+                                   "Sub Field:", _
+                                   "NRI Gas:", _
+                                   "NRI Oil:", _
+                                   "First Date System Accrued:", _
+                                   "Last Date System Accrued:", _
+                                   "Total Revenue System Accrued:", _
+                                   "Total Deducts System Accrued:", _
+                                   "Total Taxes System Accrued:", _
+                                   "Total Net System Accrued:")
+    
+    Dim arrDOINames: arrDOINames = Array("DOI UID", _
+                                      "ACTIVE STATUS", _
+                                      "EFFECTIVE DATE", _
+                                      "EXPIRATION DATE", _
+                                      "PAYOUT STATUS")
+        
+    Dim arrAccTransNames: arrAccTransNames = Array("RC NAME", _
+                                                   "RC NUMBER", _
+                                                   "ACTIVITY DATE", _
+                                                   "ACCOUNTING DATE", _
+                                                   "PRODUCT", _
+                                                   "INTEREST TYPE", _
+                                                   "DO UID", _
+                                                   "ADJUSTED 8 8 VOLUME", _
+                                                   "BTU CONTENT", _
+                                                   "AGREEMENT ID", _
+                                                   "AGR DET SEQUENCE", _
+                                                   "AGR DET SOURCE EFF DATE", _
+                                                   "TRANSACTION COMPONENT", _
+                                                   "DEDUCTION INDICATOR", _
+                                                   "COMPONENT AMT", _
+                                                   "COMPONENT 8 8 AMT")
+        
+    Dim arrActualsNames: arrActualsNames = Array("FACL NAME", _
+                                                   "STATUS", _
+                                                   "RC NAME", _
+                                                   "RC USERKEY", _
+                                                   "ACTIVITY DATE", _
+                                                   "ACCOUNTING PERIOD", _
+                                                   "PRODUCT", _
+                                                   "DO UID", _
+                                                   "GL VOLUME", _
+                                                   "GROSS", _
+                                                   "TAX", _
+                                                   "DEDUCTIONS", _
+                                                   "ADDITIONS", _
+                                                   "NET", _
+                                                   "AGREEMENT ID", _
+                                                   "AGR DET SEQ")
+            
+           
+    Dim arrRCDetails: arrRCDetails = Array("Agreement", _
+                                           "Det Seq", _
+                                           "Rate ID", _
+                                           "Current Rate", _
+                                           "Accr Price Schedule", _
+                                           "Current Price")
+            
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+    
+Set NetVols = ThisWorkbook
+Set Research = NetVols.Worksheets("Wells Needing Research")
+Set FSO = CreateObject("scripting.filesystemobject")
+Set TmpFolder = FSO.GetSpecialFolder(2)
+
+
+Workbooks.Add
+
+Set wkbActive = ActiveWorkbook
+Set wsDashboard = wkbActive.Sheets(1)
+
+ActiveWindow.DisplayGridlines = False
+
+Row_Value = Research.Buttons(Application.Caller).TopLeftCell.Row
+Col_Value = Research.Buttons(Application.Caller).TopLeftCell.Column
+RC = Research.Cells(Row_Value, Col_Value + 2)
+RCName = Research.Cells(Row_Value, Col_Value + 1)
+
+ActiveWorkbook.SaveAs Filename:=TmpFolder & "\" & "Drill Down " & RCName & " " & RC & ".xlsx"
+ActiveWindow.Zoom = 80
+'-----------------------------------------------------------------
+Call Description_SQL_Pull(RC, arrFull)
+
+With wsDashboard
+    .Columns("A").ColumnWidth = 1.7
+    .Rows(1).RowHeight = 15.75
+    .Range("B2:B12") = Application.Transpose(arrNames)
+    .Range("C2") = Research.Cells(Row_Value, Col_Value + 1)
+    .Range("C3") = Research.Cells(Row_Value, Col_Value + 2)
+    .Range("C4") = arrFull(0)(0, 0)
+    .Range("C5") = arrFull(0)(1, 0)
+    .Range("C6") = arrFull(0)(2, 0)
+    .Range("C7") = arrFull(1)(0, 0)
+    .Range("C8") = arrFull(1)(1, 0)
+    .Range("C9") = arrFull(2)(0, 0)
+    .Range("C10") = arrFull(2)(1, 0)
+    .Range("C11") = arrFull(2)(2, 0)
+    .Range("C12") = arrFull(2)(3, 0)
+    .Columns(2).HorizontalAlignment = xlRight
+    .Columns(3).HorizontalAlignment = xlLeft
+    .Cells.EntireColumn.AutoFit
+    .Cells.EntireRow.AutoFit
+    .Range("C9:C12").NumberFormat = "#,##0_);(#,##0)"
+    .Range("C7:C8").NumberFormat = "m/d/yyyy"
+End With
+'------------------------------------------------------------------
+Call DOI_SQL_Pull(RC, arrDOI, Research, Row_Value, Col_Value)
+
+If IsEmpty(arrDOI) Then
+    If IsEmpty(arrFullT) Then
+    Else
+        Erase arrFullT
+    End If
+Else
+    ReDim arrFullT(0 To UBound(arrDOI, 2), 0 To UBound(arrDOI, 1))
+    
+    For i = 0 To UBound(arrFullT, 2)
+        For j = 0 To UBound(arrFullT, 1)
+            arrFullT(j, i) = arrDOI(i, j)
+        Next
+    Next
+End If
+
+On Error Resume Next
+With wsDashboard
+    .Range("E2:I2") = arrDOINames
+    .Range("E2:I2").Font.Bold = True
+    .Range(Cells(3, 5), Cells(UBound(arrFullT) + 3, 9)) = arrFullT
+    .Cells.EntireColumn.AutoFit
+    .Cells.EntireRow.AutoFit
+    .Range("E2:I12").BorderAround Weight:=xlMedium
+    .Range("E2:I2").Borders(xlEdgeBottom).Weight = xlThin
+    .Range("E2:I12").HorizontalAlignment = xlCenter
+End With
+'-------------------------------------------------------------------
+Call ACCTRANS_SQL_Pull(RC, arrAccTrans, Research, Row_Value, Col_Value)
+
+If IsEmpty(arrAccTrans) Then
+    Erase arrFullT
+Else
+    ReDim arrFullT(0 To UBound(arrAccTrans, 2), 0 To UBound(arrAccTrans, 1))
+    
+    For i = 0 To UBound(arrFullT, 2)
+        For j = 0 To UBound(arrFullT, 1)
+            arrFullT(j, i) = arrAccTrans(i, j)
+        Next
+    Next
+End If
+
+ActiveWorkbook.Sheets.Add.Name = "Accruals"
+'ActiveWorkbook.Worksheets("Accruals").Visible = False
+
+Set rngOutput = ActiveWorkbook.Worksheets("Accruals").Range("A2")
+
+ActiveWorkbook.Worksheets("Accruals").Range("A1:P1") = arrActualsNames
+
+rngOutput.Resize(UBound(arrFullT, 1) - LBound(arrFullT, 1) + 1, _
+        UBound(arrFullT, 2) - LBound(arrFullT, 2) + 1) = arrFullT
+
+On Error Resume Next
+With wsDashboard
+    .Range("B14") = "50 most recent accrual transactions"
+    .Range("B15:Q15") = arrAccTransNames
+    .Range("B15:Q15").WrapText = True
+    .Range(Cells(16, 2), Cells(UBound(arrFullT) + 16, 17)) = arrFullT
+    .UsedRange.Columns.AutoFit
+    .Cells.EntireRow.AutoFit
+    .Range("B15:Q45").BorderAround Weight:=xlMedium
+    .Range("B15:Q15").Borders(xlEdgeBottom).Weight = xlThin
+    .Range("B15:Q45").HorizontalAlignment = xlCenter
+End With
+
+With wsDashboard.Range("B14")
+    .Font.Bold = True
+    .HorizontalAlignment = xlLeft
+    .VerticalAlignment = xlBottom
+    .Font.Size = 18
+End With
+
+'Set rng = wsDashboard.Range("B15:Q45")
+'Set tbl = wsDashboard.ListObjects.Add(xlSrcRange, rng, , xlYes)
+'tbl.TableStyle = "TableStyleMedium2"
+
+'Set rng = Nothing
+'Set tbl = Nothing
+'-------------------------------------------------------------------
+Call Agreement_Detail(RC, arrFull, Research, Row_Value, Col_Value)
+
+If IsEmpty(arrFull) Then
+Erase arrFullT
+Else
+    ReDim arrFullT(0 To UBound(arrFull, 2), 0 To UBound(arrFull, 1))
+    
+    For i = 0 To UBound(arrFullT, 2)
+        For j = 0 To UBound(arrFullT, 1)
+            arrFullT(j, i) = arrFull(i, j)
+        Next
+    Next
+End If
+
+On Error Resume Next
+With wsDashboard
+    .Range("K2:P2") = arrRCDetails
+    .Range("K2:P2").Font.Bold = True
+    .Range(Cells(3, 11), Cells(UBound(arrFullT) + 3, 12)) = arrFullT
+    .UsedRange.Columns.AutoFit
+    .Cells.EntireRow.AutoFit
+    .Range("K2:P12").BorderAround Weight:=xlMedium
+    .Range("K2:P2").Borders(xlEdgeBottom).Weight = xlThin
+    .Range("K2:P12").HorizontalAlignment = xlCenter
+End With
+'-------------------------------------------------------------------
+Call Actuals_SQL_Pull(RC, arrFull, Research, Row_Value, Col_Value)
+
+If IsEmpty(arrFull) Then
+Erase arrFullT
+Else
+    ReDim arrFullT(0 To UBound(arrFull, 2), 0 To UBound(arrFull, 1))
+    
+    For i = 0 To UBound(arrFullT, 2)
+        For j = 0 To UBound(arrFullT, 1)
+            arrFullT(j, i) = arrFull(i, j)
+        Next
+    Next
+End If
+
+ActiveWorkbook.Sheets.Add.Name = "Actuals"
+'ActiveWorkbook.Worksheets("Actuals").Visible = False
+
+Set rngOutput = ActiveWorkbook.Worksheets("Actuals").Range("A2")
+
+ActiveWorkbook.Worksheets("Actuals").Range("A1:P1") = arrActualsNames
+
+rngOutput.Resize(UBound(arrFullT, 1) - LBound(arrFullT, 1) + 1, _
+        UBound(arrFullT, 2) - LBound(arrFullT, 2) + 1) = arrFullT
+
+On Error Resume Next
+With wsDashboard
+    .Range("B47") = "50 most recent distribution transactions"
+    .Range("B48:Q48") = arrActualsNames
+    .Range("B48:Q48").WrapText = True
+    'for i =
+    .Range(Cells(49, 2), Cells(UBound(arrFullT) + 49, 17)) = arrFullT
+    .UsedRange.Columns.AutoFit
+    .Cells.EntireRow.AutoFit
+    .Range("B48:Q98").BorderAround Weight:=xlMedium
+    .Range("B48:Q48").Borders(xlEdgeBottom).Weight = xlThin
+    .Range("B48:Q98").HorizontalAlignment = xlCenter
+End With
+
+With wsDashboard.Range("B47")
+    .Font.Bold = True
+    .HorizontalAlignment = xlLeft
+    .VerticalAlignment = xlBottom
+    .Font.Size = 18
+End With
+
+'Set rng = wsDashboard.Range("B48:Q98")
+'Set tbl = wsDashboard.ListObjects.Add(xlSrcRange, rng, , xlYes)
+'tbl.TableStyle = "TableStyleMedium7"
+'
+'Set rng = Nothing
+'Set tbl = Nothing
+'-------------------------------------------------------------------
+
+With wsDashboard
+    .UsedRange.Columns.AutoFit
+    .Cells.EntireRow.AutoFit
+    .Columns("B").ColumnWidth = 33.71
+    .Columns("C").ColumnWidth = 29.71
+    .Columns("D:Q").ColumnWidth = 17.29
+    .Rows(15).RowHeight = 30
+    .Rows(48).RowHeight = 30
+    .Range("B2:B12").Font.Bold = True
+End With
+
+wsDashboard.Activate
+wsDashboard.Rows(14).Select
+ActiveWindow.FreezePanes = True
+wsDashboard.Range("A1").Select
+
+Application.ScreenUpdating = True
+Application.DisplayAlerts = True
+
+
+End Sub
+
+Sub Description_SQL_Pull(ByVal RC, arrFull)
+
+    Dim SQL_Statement As String
+    Dim i As Long
+    Dim p As Long
+    Dim h As Long: h = 4
+    Dim rngOutput As Range
+    Dim LR As Long
+    Dim arrSQL1 As Variant
+    Dim arrSQL2 As Variant
+    Dim arrSQL3 As Variant
+    Dim strPlaceHolder As String
+
+Server_Name = "SHERIP"
+strUserName = "APPSV"
+strPassword = "APPSV"
+
+' Open connection to server & database
+strConn = "Provider=OraOLEDB.Oracle;" & _
+    "Data Source=" & Server_Name & ";" & _
+    "User ID=" & strUserName & ";" & _
+    "Password=" & strPassword & ";"
+
+For i = 5 To 7
+
+    SQL_Statement = ""
+    
+    LR = ThisWorkbook.Worksheets("SQL Code").Cells(Rows.count, i).End(xlUp).Row
+    
+    For p = 2 To LR
+        strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(p, i).Value & " "
+        SQL_Statement = SQL_Statement & strPlaceHolder
+    Next p
+    
+    SQL_Statement = SQL_Statement & " " & RC
+    
+    Set conn = New ADODB.Connection
+    Set cmd = New ADODB.Command
+    Set rst = New ADODB.Recordset
+    
+    With conn
+        .Open strConn
+        .CursorLocation = adUseClient
+    End With
+    
+    ' Set command to execute query. Timeout set to 10 minutes.
+    cmd.ActiveConnection = conn
+    cmd.CommandText = SQL_Statement
+    cmd.CommandTimeout = 600
+    
+    With rst
+        .ActiveConnection = conn
+        .Open Source:=SQL_Statement
+    End With
+    
+    On Error Resume Next
+    If i = 5 Then
+        arrSQL1 = rst.GetRows
+    ElseIf i = 6 Then
+        arrSQL2 = rst.GetRows
+    ElseIf i = 7 Then
+        arrSQL3 = rst.GetRows
+    End If
+    
+    Call Close_Objects
+        
+Next i
+
+ReDim arrFull(2)
+arrFull(0) = arrSQL1
+arrFull(1) = arrSQL2
+arrFull(2) = arrSQL3
+
+End Sub
+
+Sub DOI_SQL_Pull(ByVal RC, arrDOI, ByVal Research, ByVal Row_Value, ByVal Col_Value)
+
+    Dim SQL_Statement As String
+    Dim strPlaceHolder As String
+    Dim i As Long
+    Dim LR As Long
+    
+Server_Name = "SHERIP"
+strUserName = "APPSV"
+strPassword = "APPSV"
+
+' Open connection to server & database
+strConn = "Provider=OraOLEDB.Oracle;" & _
+    "Data Source=" & Server_Name & ";" & _
+    "User ID=" & strUserName & ";" & _
+    "Password=" & strPassword & ";"
+
+ThisWorkbook.Worksheets("SQL Code").Range("H17") = Research.Cells(Row_Value, Col_Value + 2)
+    
+LR = ThisWorkbook.Worksheets("SQL Code").Cells(Rows.count, 8).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 8).Value & " "
+    SQL_Statement = SQL_Statement & strPlaceHolder
+Next i
+
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement
+End With
+On Error Resume Next
+arrDOI = rst.GetRows
+
+Call Close_Objects
+        
+End Sub
+Sub ACCTRANS_SQL_Pull(ByVal RC, arrAccTrans, ByVal Research, ByVal Row_Value, ByVal Col_Value)
+
+    Dim SQL_Statement As String
+    Dim strPlaceHolder As String
+    Dim i As Long
+    Dim LR As Long
+    Dim test As Long
+    
+Server_Name = "SHERIP"
+strUserName = "APPSV"
+strPassword = "APPSV"
+
+' Open connection to server & database
+strConn = "Provider=OraOLEDB.Oracle;" & _
+    "Data Source=" & Server_Name & ";" & _
+    "User ID=" & strUserName & ";" & _
+    "Password=" & strPassword & ";"
+
+ThisWorkbook.Worksheets("SQL Code").Range("I24") = Research.Cells(Row_Value, Col_Value + 2)
+    
+LR = ThisWorkbook.Worksheets("SQL Code").Cells(Rows.count, 9).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 9).Value & " "
+    SQL_Statement = SQL_Statement & strPlaceHolder
+Next i
+
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement
+End With
+
+On Error Resume Next
+arrAccTrans = rst.GetRows
+
+Call Close_Objects
+        
+End Sub
+Sub Actuals_SQL_Pull(ByVal RC, arrFull, ByVal Research, ByVal Row_Value, ByVal Col_Value)
+
+    Dim SQL_Statement As String
+    Dim strPlaceHolder As String
+    Dim i As Long
+    Dim LR As Long
+    Dim test As Long
+    
+Server_Name = "SHERIP"
+strUserName = "APPSV"
+strPassword = "APPSV"
+
+' Open connection to server & database
+strConn = "Provider=OraOLEDB.Oracle;" & _
+    "Data Source=" & Server_Name & ";" & _
+    "User ID=" & strUserName & ";" & _
+    "Password=" & strPassword & ";"
+
+Erase arrFull
+
+ThisWorkbook.Worksheets("SQL Code").Range("J24") = Research.Cells(Row_Value, Col_Value + 2)
+    
+LR = ThisWorkbook.Worksheets("SQL Code").Cells(Rows.count, 10).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 10).Value & " "
+    SQL_Statement = SQL_Statement & strPlaceHolder
+Next i
+
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement
+End With
+
+On Error Resume Next
+arrFull = rst.GetRows
+
+Call Close_Objects
+        
+End Sub
+Sub Agreement_Detail(ByVal RC, arrFull, ByVal Research, ByVal Row_Value, ByVal Col_Value)
+
+    Dim SQL_Statement As String
+    Dim strPlaceHolder As String
+    Dim i As Long
+    Dim LR As Long
+    Dim test As Long
+    
+Server_Name = "SHERIP"
+strUserName = "APPSV"
+strPassword = "APPSV"
+
+' Open connection to server & database
+strConn = "Provider=OraOLEDB.Oracle;" & _
+    "Data Source=" & Server_Name & ";" & _
+    "User ID=" & strUserName & ";" & _
+    "Password=" & strPassword & ";"
+
+Erase arrFull
+
+ThisWorkbook.Worksheets("SQL Code").Range("K13") = Research.Cells(Row_Value, Col_Value + 2)
+    
+LR = ThisWorkbook.Worksheets("SQL Code").Cells(Rows.count, 11).End(xlUp).Row
+
+For i = 2 To LR
+    strPlaceHolder = ThisWorkbook.Worksheets("SQL Code").Cells(i, 11).Value & " "
+    SQL_Statement = SQL_Statement & strPlaceHolder
+Next i
+
+
+Set conn = New ADODB.Connection
+Set cmd = New ADODB.Command
+Set rst = New ADODB.Recordset
+
+With conn
+    .Open strConn
+    .CursorLocation = adUseClient
+End With
+
+' Set command to execute query. Timeout set to 10 minutes.
+cmd.ActiveConnection = conn
+cmd.CommandText = SQL_Statement
+cmd.CommandTimeout = 600
+
+With rst
+    .ActiveConnection = conn
+    .Open Source:=SQL_Statement
+End With
+
+On Error Resume Next
+arrFull = rst.GetRows
+
+Call Close_Objects
+        
+End Sub
+Sub test()
+Application.ScreenUpdating = True
+Application.DisplayAlerts = True
+
+End Sub
