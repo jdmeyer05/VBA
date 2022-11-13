@@ -1,7 +1,7 @@
 # VBA-Code
 Excel VBA Code
 
-LOS Exceptions.txt
+LOS Exceptions
   - This file was a program I wrote for the Expenditure group for exception analysis. They were spending days combing through Excel workbooks manually when I asked them if they wanted me to build something for them. I ended up building this code. There is a userform that is also attached to it but I have not added that here. The way this works is the user will select the various features they want to analyze and the code runs just those portions for them. It also prompts them to input w/e thresholds they are looking for. So the program is fairly flexible and they are still using it at Sheridan Production to this day.
 
 Monte Carlo Warhammer 40k
