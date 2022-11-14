@@ -2,7 +2,10 @@ Excel VBA Code
 
 LOS Exceptions
 
-  - This file was a program I wrote for the Expenditure group for exception analysis. They spent days combing through Excel workbooks manually when I asked them if they wanted me to build something for them. I ended up creating this code. There is a user form that is also attached to it, but I have not added that here. The way the code works is the user will select the various features they want to analyze, and the code runs just those portions for them. It also prompts them to input the thresholds they are looking for. So the program is reasonably flexible, and they are still using it at Sheridan Production currently.
+  - This file was a program I wrote for the Expenditure group for exception analysis. They spent days combing through Excel workbooks manually when I asked them if they wanted me to build something for them. I ended up creating this code. 
+  - There is a user form that is also attached to it, but I have not added that here. 
+  - The way the code works is the user will select the various features they want to analyze, and the code runs just those portions for them. It also prompts them to input the thresholds they are looking for. 
+  - So the program is reasonably flexible, and they are still using it at Sheridan Production currently.
   
 Monte Carlo Warhammer 40k
   - Warhammer 40k is a complicated tabletop game. This was just a fun program to create with some valuable visualizations. Basically, it runs a series of randomized tests, collects the data from these tests, which carry through in a sequence, and then outputs a result. I gathered 10000 results and created a histogram. If the results are pretty "Normal," as in normal gaussian distribution, then I calculate a few probabilities to inform the player about the likelihood of the interaction being beneficial or not.
