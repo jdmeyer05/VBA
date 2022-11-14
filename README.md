@@ -8,7 +8,8 @@ LOS Exceptions
   - So the program is reasonably flexible, and they are still using it at Sheridan Production currently.
   
 Monte Carlo Warhammer 40k
-  - Warhammer 40k is a complicated tabletop game. This was just a fun program to create with some valuable visualizations. Basically, it runs a series of randomized tests, collects the data from these tests, which carry through in a sequence, and then outputs a result. I gathered 10000 results and created a histogram. If the results are pretty "Normal," as in normal gaussian distribution, then I calculate a few probabilities to inform the player about the likelihood of the interaction being beneficial or not.
+  - Warhammer 40k is a complicated tabletop game. This was just a fun program to create with some valuable visualizations. 
+  - Basically, it runs a series of randomized tests, collects the data from these tests, which carry through in a sequence, and then outputs a result. I gathered 10000 results and created a histogram. If the results are pretty "Normal," as in normal gaussian distribution, then I calculate a few probabilities to inform the player about the likelihood of the interaction being beneficial or not.
   
 Net Volume Analysis Full
   - The main function for me when I was a Revenue Accountant at Sheridan Production was to generate, calculate and analyze the revenue accrual every month. I inherited a process that took several hours and iterations. 
