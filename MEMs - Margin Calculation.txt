@@ -1,0 +1,367 @@
+Option Explicit
+Option Base 1
+'Code created by Justin Meyer
+'Co created by Jack Xu
+
+
+Sub StartGather()
+
+    Dim Result As Integer
+    
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+
+Result = MsgBox("Do Want to run the Margin Calculation?", vbYesNo)
+
+If Result = vbYes Then
+    Call DataGather
+Else
+    VBA.Interaction.MsgBox Prompt:="Operation cancelled by user."
+End If
+
+Application.ScreenUpdating = True
+Application.DisplayAlerts = True
+
+End Sub
+
+Sub DataGather()
+    
+    Dim i As Long: i = 1
+    Dim j As Long: j = 1
+    Dim x As Long: x = 1
+    Dim y As Long: y = 1
+    Dim g As Long: g = 1
+    Dim h As Long: h = 1
+    Dim u As Long: u = 1
+    Dim w As Long: w = 1
+    Dim a As Long
+    Dim b As Long
+    
+    Dim arrTemp As Variant      ' This array is used to house all the raw data from the csv file
+    Dim arrTemp2 As Variant     ' This array is a subset of arrTemp. It will only house data where the "CURRENCY1" column is not blank
+    Dim arrCurrentDay As Variant
+    Dim arrPreviousDay As Variant
+    Dim dtCurrentDate As Variant
+    Dim arrTemplate As Variant
+    Dim arr3 As Variant
+    Dim lookupvalue As Variant
+    Dim vlookup As Variant
+    
+    Dim dlgFolder As FileDialog
+    
+    Dim strFolder As String
+    Dim strFileName As String
+    Dim rngCurrentDay As String
+    Dim rngPreviousDay As String
+    Dim strSheetname As String
+    Dim strFileDate As String
+    Dim strYear2 As String
+    Dim strMonth As String
+    Dim strDay As String
+    
+    Dim ws As Worksheet
+    Dim wsTemplate As Worksheet
+    Dim wksEach As Worksheet
+    Dim wkbOpen As Workbook
+    
+    Dim LastRow As Long
+    Dim LastColumn As Long
+    Dim lngDialog As Long
+    Dim lgCurrency1Column As Long
+    Dim lgCurrency2Column As Long
+    Dim lgCurrency3Column As Long
+    Dim lgCurrency4Column As Long
+    
+Application.ScreenUpdating = False                  ' Speeds up runtime by disabling screen updating
+Application.DisplayAlerts = False                   ' Speeds up runtime by disabling display alerts
+
+rngCurrentDay = ThisWorkbook.Sheets(1).Range("O3").Value
+rngPreviousDay = ThisWorkbook.Sheets(1).Range("O4").Value
+
+ReDim arrTemp2(25, 1)
+ReDim arr3(100, 2)
+
+' User selects folder location
+Set dlgFolder = Application.FileDialog(msoFileDialogFolderPicker)
+Let dlgFolder.Title = "Please select the folder you wish to use" & _
+                        " for the Margin Calculation workbook."
+Let lngDialog = dlgFolder.Show
+
+' Handles for user folder select cancellation
+If lngDialog = 0 Then
+    VBA.Interaction.MsgBox Prompt:="Operation cancelled by user."
+    GoTo endscript
+Else
+    Let strFolder = dlgFolder.SelectedItems(1) & "\"
+End If
+
+' Iterate through every csv file in folder
+strFileName = VBA.FileSystem.Dir(pathname:=strFolder & "*.csv*")           ' Tells the code to look for any file with ".csv"
+    While strFileName <> VBA.Constants.vbNullString                        ' If the strFileName is not null then the loop continues until it is
+        Set wkbOpen = Application.Workbooks.Open(strFolder & strFileName)  ' Opens the next workbook
+        
+        ' This section extract the date from the file name
+        strFileDate = Mid(strFileName, 7, 8)                               ' Breaks out the date from the file name
+        strYear2 = Left(strFileDate, 4)                                    ' Gets just the year
+        strMonth = Mid(strFileDate, 5, 2)                                  ' Gets just the month
+        strDay = Right(strFileDate, 2)                                     ' Gets just the day
+        dtCurrentDate = CDate(strDay & " " & strMonth & " " & strYear2)    ' Combines and converts to date format
+        strSheetname = strMonth & "-" & strDay                             ' Creates the string that will be used to name the new sheets
+        
+        Set wsTemplate = ThisWorkbook.Worksheets("Template")               ' Sets the template worksheets to a variable
+        
+        wsTemplate.Copy After:=ThisWorkbook.Sheets(1)                      ' Inserts a copy of the template worksheets in front of sheet1
+        
+        Set ws = ThisWorkbook.ActiveSheet                                  ' Sets the ws variable to the newly added worksheet for easy reference
+        ws.Name = strSheetname                                             ' Names new ws with the month and day data parsed from the csv file name
+        Set ws = ThisWorkbook.Worksheets(strSheetname)
+        
+        If IsEmpty(arrPreviousDay) Then                                    ' Check if the previous day array is empty. For the first pass it should be empty
+        Else
+            ws.Range(rngPreviousDay) = arrPreviousDay                      ' Places the previous day values into the previous day section
+        End If
+        
+        ' ###################################################################################################
+        '
+        ' The idea here is to:
+        '   1.) Move all the data from the CSV to a temp array
+        '       - This is done for speed. It is faster to loop over an array than a worksheet
+        '   2.) Move only the relevant data from the temp array to temp array 2
+        '       - There are 22k rows of data but only 100 are needed for this process
+        '   3.) Located each currency type and assign the column value to its respective variable
+        '   4.) Using a third array assign the concatenated ACCOUNT+DESCRPTION and ACCOUNT column
+        '   5.) Gets only the values for each concatenated ACCOUNT+DESCRPTION given the correct CURRENCY type
+        '   6.) Populate the array template which is then used to populate the current month sheet
+        '
+        ' ###################################################################################################
+        
+        
+        ' 1.) Move all the data from the CSV to a temp array
+        
+        LastRow = Workbooks(strFileName).Sheets(1).UsedRange.Rows.Count                             ' Finds the last row of the used data range
+        LastColumn = Workbooks(strFileName).Sheets(1).UsedRange.Columns.Count                       ' Finds the last column of the used data range
+        Workbooks(strFileName).Activate
+        arrTemp = Workbooks(strFileName).Sheets(1).Range(Cells(1, 1), Cells(LastRow, LastColumn))   ' **KEY ITEM** Moves all the csv data to a temp array
+        wkbOpen.Close savechanges:=False                                                            ' Closes current open csv file without saving any changes
+        
+        ' 2.) Move only the relevant data from the temp array to temp array 2
+        
+        j = 1   ' Resets variable to 1
+        u = 1   ' Resets variable to 1
+        h = 1   ' Resets variable to 1
+        g = 1   ' Resets variable to 1
+        
+        ' For each file run the array process
+        For j = LBound(arrTemp) To UBound(arrTemp)   ' Controls for row movement by using the upper/lower bound of the arrTemp
+             If arrTemp(j, 13) <> "" Then            ' If the cell is not empty/blank then trigger row scrap
+                 For u = 1 To 24
+                     arrTemp2(u, h) = arrTemp(j, u)  ' Row scrap from temp array to temp array 2. This step removes all the unwanted data
+                 Next u
+                 arrTemp2(25, h) = arrTemp2(1, h) _
+                                 & arrTemp2(7, h)
+                 h = h + 1                           ' Iterates for the arrTemp2 column
+                 g = g + 1                           ' Iterates for the number of columns needed in arrTemp2
+                 ReDim Preserve arrTemp2(25, 1 To g) ' Adds an extra column to arrTemp2 and preserves existing data
+             End If
+        Next j
+        
+        ' 3.) Locates all of the column locations for each currency type
+        
+        j = 1   ' Resets variable to 1
+        i = 1   ' Resets variable to 1
+        
+        For j = LBound(arrTemp2) To UBound(arrTemp2)
+            For i = 1 To 5                               ' I set this to 5 because the column headers shouldn't be further down than between rows 1 and 5
+                If arrTemp2(j, i) = "CURRENCY1" Then     ' This is HARD CODED
+                    lgCurrency1Column = j
+                ElseIf arrTemp2(j, i) = "CURRENCY2" Then ' This is HARD CODED
+                    lgCurrency2Column = j
+                ElseIf arrTemp2(j, i) = "CURRENCY3" Then ' This is HARD CODED
+                    lgCurrency3Column = j
+                ElseIf arrTemp2(j, i) = "CURRENCY4" Then ' This is HARD CODED
+                    lgCurrency4Column = j
+                End If
+            Next i
+        Next j
+        
+        ' 4.) Using a third array to assign the concatenated ACCOUNT+DESCRPTION and ACCOUNT column
+        
+        ReDim arr3(UBound(arrTemp2, 2), 3)
+        j = 1   ' Resets variable to 1
+        i = 1   ' Resets variable to 1
+        x = 25                                                   ' x = 25 is the 2nd dimension location in arrTemp2 for the concatenated ACCOUNT+DESCRPTION
+        For i = 1 To 2
+            For j = LBound(arrTemp2, 2) To UBound(arrTemp2, 2)
+                If i = 2 Then x = 1                              ' Uses some logic to toggle between the two categories needed
+                arr3(j, i) = arrTemp2(x, j)
+            Next j
+        Next i
+            
+        ' 5.) Gets only the values for each concatenated ACCOUNT+DESCRPTION given the correct CURRENCY type
+        
+        j = 1   ' Resets variable to 1
+        
+        For j = LBound(arrTemp2, 2) To UBound(arrTemp2, 2)
+            
+            If arr3(j, 1) = "MEM00" Then
+                i = lgCurrency3Column
+            ElseIf arr3(j, 1) = "MEM01" Then ' This is HARD CODED
+                i = lgCurrency1Column
+            ElseIf arr3(j, 1) = "MEM02" Then ' This is HARD CODED
+                i = lgCurrency1Column
+            ElseIf arr3(j, 1) = "MEM03" Then ' This is HARD CODED
+                i = lgCurrency3Column
+            ElseIf arr3(j, 1) = "MEM04" Then ' This is HARD CODED
+                i = lgCurrency1Column
+            ElseIf arr3(j, 1) = "MEM05" Then ' This is HARD CODED
+                i = lgCurrency1Column
+            ElseIf arr3(j, 1) = "RMEMS" Then ' This is HARD CODED
+                i = lgCurrency4Column
+            End If
+            
+            arr3(j, 3) = arrTemp2(i, j)         ' Assigns the value to the 3rd column of arr3
+            
+        Next j
+        
+        ' 6.) Populate the array template which is then used to populate the current month sheet
+        
+        j = 1   ' Resets variable to 1
+        i = 1   ' Resets variable to 1
+        
+        arrTemplate = ThisWorkbook.Worksheets("Template").Range(rngCurrentDay).Formula    ' Sets arrTemplate to the values found in the user selected range
+        For j = LBound(arrTemplate) To UBound(arrTemplate)
+            For i = LBound(arrTemplate, 2) To UBound(arrTemplate, 2)
+                vlookup = ""
+                On Error Resume Next
+                lookupvalue = arrTemplate(j, i)               ' Sets the lookup value to w/e description is on the template at the given intersection
+                vlookup = Application.WorksheetFunction _
+                    .vlookup(lookupvalue, arr3, 3, False)     ' Uses the lookup value to perform a vlookup on the array to pull the value needed
+                If vlookup = "" Then                          ' Sets up a condition where if the vlookup returns an error then the value remains ""
+                Else                                          ' This mean that the vlookup will only work with values that can actually be looked up
+                    arrTemplate(j, i) = vlookup               ' **KEY ITEM** This code is what places the value from the valid lookup into arrTemplate
+                End If
+            Next i
+        Next j
+        
+        arrTemplate(1, 1) = dtCurrentDate            ' Puts the current date in the top left hand corner of the output table
+        ws.Range(rngCurrentDay) = arrTemplate        ' **KEY ITEM** This is what places the completed array into the current worksheet
+        
+        arrPreviousDay = ws.Range(rngCurrentDay)     ' Once the array template is set to a range the range calculates. This grabs that
+                                                     ' calculated data and stores it for the next day
+        
+        
+        Let strFileName = VBA.FileSystem.Dir()       ' Sets to empty
+        Set ws = Nothing
+        
+    Wend
+
+
+wsTemplate.Visible = xlSheetHidden                   ' Hides the Template sheet
+
+endscript:                                           ' Dumps the process here if no folder has been selected
+
+Application.ScreenUpdating = True
+Application.DisplayAlerts = True
+
+End Sub
+
+Sub UserSelectRange_CM()
+
+' User selects the output range
+ThisWorkbook.Worksheets("Template").Visible = xlSheetVisible
+ThisWorkbook.Worksheets("Template").Activate                      ' Activates the sheet the user needs to select a range in
+Dim rng1 As Range                                                 ' Declares the rng1 variable
+
+On Error Resume Next
+
+' Creates an input box for the user to select the needed range
+Set rng1 = Application.InputBox( _
+    Title:="Range needed for output", _
+    Prompt:="Select the range of cells used for your output", _
+    Type:=8)
+
+' Handles for user folder select cancellation
+If rng1.Address = "" Then
+    VBA.Interaction.MsgBox Prompt:="Operation cancelled by user."
+    GoTo endscript
+Else
+    ' Places range address
+    With ThisWorkbook.Sheets(1)
+        .Range("O3") = rng1.Address     ' Sets the cell to the user specified range
+        .Activate
+    End With
+End If
+
+endscript:
+ThisWorkbook.Sheets(1).Activate
+End Sub
+
+Sub UserSelectRange_PM()
+
+' User selects the output range
+ThisWorkbook.Worksheets("Template").Visible = xlSheetVisible
+ThisWorkbook.Worksheets("Template").Activate                      ' Activates the sheet the user needs to select a range in
+Dim rng1 As Range                                                 ' Declares the rng1 variable
+
+On Error Resume Next
+
+' Creates an input box for the user to select the needed range
+Set rng1 = Application.InputBox( _
+    Title:="Range needed for output", _
+    Prompt:="Select the range of cells used for your output", _
+    Type:=8)
+
+' Handles for user folder select cancellation
+If rng1.Address = "" Then
+    VBA.Interaction.MsgBox Prompt:="Operation cancelled by user."
+    GoTo endscript
+Else
+    ' Places range address
+    With ThisWorkbook.Sheets(1)
+        .Range("O4") = rng1.Address     ' Sets the cell to the user specified range
+        .Activate
+    End With
+End If
+
+endscript:
+ThisWorkbook.Sheets(1).Activate
+End Sub
+
+Sub RemoveOldSheets()
+
+    Dim xWs As Worksheet
+    Dim Result As Integer
+    
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+
+Result = MsgBox("Do Want to remove old sheets?", vbYesNo)
+
+If Result = vbYes Then
+    ' Loops through each worksheet in the Host workbook and does work on sheets with the same name
+    For Each xWs In ThisWorkbook.Worksheets
+        Select Case xWs.Name
+        Case "Start Here - Margin Calc Macro", "Template"
+        Case Else
+        xWs.Delete  ' Deletes any sheets that are not listed above
+        End Select
+    Next
+Else
+    VBA.Interaction.MsgBox Prompt:="Operation cancelled by user."
+End If
+
+Application.ScreenUpdating = True
+Application.DisplayAlerts = True
+
+End Sub
+
+Sub MakeTemplateVisible()
+Application.ScreenUpdating = False
+Application.DisplayAlerts = False
+
+' Switches the visibility of the Template sheet to visible
+ThisWorkbook.Worksheets("Template").Visible = xlSheetVisible
+
+Application.ScreenUpdating = True
+Application.DisplayAlerts = True
+End Sub
