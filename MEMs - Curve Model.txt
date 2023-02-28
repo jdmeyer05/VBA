@@ -1,0 +1,303 @@
+Option Explicit
+Option Base 1
+
+Sub ClearContent_v2()
+
+    Dim i As Long
+    Dim j As Long
+    Dim LastRow As Long
+    Dim LastColumn As Long
+    
+    Dim ws As Worksheet
+    
+    Dim wkb As Workbook
+    
+    Set wkb = ThisWorkbook
+
+Application.ScreenUpdating = False
+' Loops through each worksheet. Ignores sheets that are listed below.
+' For all other sheets the loop locates particular columns and clears the contents of those columns.
+For Each ws In wkb.Worksheets
+    Select Case ws.Name
+    Case _
+ _
+       "Months", _
+       "Henry Hub", _
+       "Instructions & To-Do", _
+       "Summary", _
+       "EOD Marks", _
+       "Prev Day Marks", _
+       "Trade Journal", _
+       "Seasonal Strips", _
+       "Quarters", _
+       "AS Trade Notes", _
+       "Cals"
+        
+    Case Else
+        LastRow = ws.UsedRange.Rows.Count         ' Finds the last row of the used data range
+        LastColumn = ws.UsedRange.Columns.Count   ' Finds the last column of the used data range
+        ws.Activate
+        For i = 4 To LastColumn
+            If ws.Cells(4, i) = "5x16" _
+            Or ws.Cells(4, i) = "Mark Date" _
+            Or ws.Cells(4, i) = "2x16" _
+            Or ws.Cells(4, i) = "7x8" _
+            Or ws.Cells(4, i) = "7x16" _
+            Or ws.Cells(4, i) = "WRAP" _
+            Or ws.Cells(4, i) = "7x24" Then
+               ws.Range(Cells(6, i), Cells(LastRow, i)).ClearContents
+            End If
+        Next i
+    End Select
+Next
+
+wkb.Worksheets("Instructions & To-Do").Activate ' Sets the user view back to the Instructions sheet.
+
+Application.ScreenUpdating = True
+End Sub
+
+Sub PopulateCurves_v2()
+'
+    Dim i As Long
+    Dim j As Long
+    
+    Dim LastRow As Long
+    Dim LastColumn As Long
+    
+    Dim ws As Worksheet
+    Dim wsPrev As Worksheet
+    
+    Dim wkb As Workbook
+    
+    Dim str_Name As String
+    
+    Dim lnTableRef As Long
+    Dim lnStartRowRef As Long
+    
+    ' Starting column locations in Prev Day Marks sheet.
+    ' All of the values below are HARD CODED.
+    ' If a new section were to be added to the "Prev Day Marks" sheet then these would need to be updated.
+    Dim strHB_NORTH As Long:    strHB_NORTH = 5
+    Dim strHB_HOUSTON As Long:  strHB_HOUSTON = 11
+    Dim strHB_WEST As Long:     strHB_WEST = 17
+    Dim strHB_SOUTH As Long:    strHB_SOUTH = 23
+    Dim strLZ_NORTH As Long:    strLZ_NORTH = 29
+    Dim strLZ_HOUSTON As Long:  strLZ_HOUSTON = 35
+    Dim strLZ_WEST As Long:     strLZ_WEST = 41
+    Dim strLZ_SOUTH As Long:    strLZ_SOUTH = 47
+    Dim strPhysFin As Long:     strPhysFin = 53
+    Dim strHB_NORTH_HR As Long: strHB_NORTH_HR = 59
+    Dim strHN As Long:          strHN = 65
+    Dim strNW As Long:          strNW = 71
+    Dim strNS As Long:          strNS = 77
+    Dim strLZ_NHB_N As Long:    strLZ_NHB_N = 83
+    Dim strLZ_HHB_H As Long:    strLZ_HHB_H = 89
+    Dim strLZ_WHB_W As Long:    strLZ_WHB_W = 95
+    Dim strLZ_SHB_S As Long:    strLZ_SHB_S = 101
+
+    Set wkb = ThisWorkbook
+    Set wsPrev = ThisWorkbook.Worksheets("Prev Day Marks")      ' This sheet name is HARD CODED. If the sheet name were to change then this would also need to be updated.
+
+Application.ScreenUpdating = False
+' Check for holiday row skip
+If wsPrev.Cells(1, 6) = "Y" Then    ' Check cell F2 in sheet "EOD Marks"
+    lnStartRowRef = 14
+Else
+    lnStartRowRef = 15
+End If
+
+' Loops through each worksheet. Gets worksheet name.
+' If the name matches one of the below then the variable lnTableRef
+' is populated with the location of that sheets name in the Prev Day Marks sheet.
+For Each ws In wkb.Worksheets
+    lnTableRef = 0
+    If ws.Name = "HB_North" Then
+        lnTableRef = strHB_NORTH
+    ElseIf ws.Name = "HB_Houston" Then
+        lnTableRef = strHB_HOUSTON
+    ElseIf ws.Name = "HB_West" Then
+        lnTableRef = strHB_WEST
+    ElseIf ws.Name = "HB_South" Then
+        lnTableRef = strHB_SOUTH
+    ElseIf ws.Name = "LZ_North" Then
+        lnTableRef = strLZ_NORTH
+    ElseIf ws.Name = "LZ_Houston" Then
+        lnTableRef = strLZ_HOUSTON
+    ElseIf ws.Name = "LZ_West" Then
+        lnTableRef = strLZ_WEST
+    ElseIf ws.Name = "LZ_South" Then
+        lnTableRef = strLZ_SOUTH
+    ElseIf ws.Name = "Phys-Fin" Then
+        lnTableRef = strPhysFin
+    ElseIf ws.Name = "HB_North HR" Then
+        lnTableRef = strHB_NORTH_HR
+    ElseIf ws.Name = "H-N" Then
+        lnTableRef = strHN
+    ElseIf ws.Name = "N-W" Then
+        lnTableRef = strNW
+    ElseIf ws.Name = "N-S" Then
+        lnTableRef = strNS
+    ElseIf ws.Name = "LZ_N-HB_N" Then
+        lnTableRef = strLZ_NHB_N
+    ElseIf ws.Name = "LZ_H-HB_H" Then
+        lnTableRef = strLZ_HHB_H
+    ElseIf ws.Name = "LZ_W-HB_W" Then
+        lnTableRef = strLZ_WHB_W
+    ElseIf ws.Name = "LZ_S-HB_S" Then
+        lnTableRef = strLZ_SHB_S
+    End If
+    ' As long as lnTableRef is not zero the following set of instructions will be run.
+    ' If lnTableRef is zero then ws.name is currently on a sheet that is not apart of this process.
+    If lnTableRef <> 0 Then
+        wsPrev.Activate
+        
+        LastRow = ws.UsedRange.Rows.Count         ' Finds the last row of the used data range
+        LastColumn = ws.UsedRange.Columns.Count   ' Finds the last column of the used data range
+        
+        ' Copies over the 5x16
+        wsPrev.Range(Cells(lnStartRowRef, lnTableRef), Cells(LastRow, lnTableRef)).Copy Destination:=ws.Range("D95")
+        ' Copies over the 5x16 Mark Date
+        wsPrev.Range(Cells(lnStartRowRef, lnTableRef + 1), Cells(LastRow, lnTableRef + 1)).Copy Destination:=ws.Range("F95")
+        ' Copies over the 2x16
+        wsPrev.Range(Cells(lnStartRowRef, lnTableRef + 2), Cells(LastRow, lnTableRef + 2)).Copy Destination:=ws.Range("G95")
+        ' Copies over the 2x16 Mark Date
+        wsPrev.Range(Cells(lnStartRowRef, lnTableRef + 3), Cells(LastRow, lnTableRef + 3)).Copy Destination:=ws.Range("I95")
+        ' Copies over the 7x8
+        wsPrev.Range(Cells(lnStartRowRef, lnTableRef + 4), Cells(LastRow, lnTableRef + 4)).Copy Destination:=ws.Range("J95")
+        ' Copies over the 7x8 Mark Date
+        wsPrev.Range(Cells(lnStartRowRef, lnTableRef + 5), Cells(LastRow, lnTableRef + 5)).Copy Destination:=ws.Range("L95")
+    End If
+
+Next
+
+wkb.Worksheets("Instructions & To-Do").Activate ' Sets the user view back to the Instructions sheet.
+
+Application.ScreenUpdating = True
+End Sub
+Sub ClearMarks()
+
+' ClearMarks Macro
+' Clear Prev Day Marks
+
+    Dim LastRow As Long
+    Dim LastColumn As Long
+    Dim ws As Worksheet
+    
+    Set ws = ThisWorkbook.Worksheets("Prev Day Marks")
+    
+LastRow = ws.UsedRange.Rows.Count         ' Finds the last row of the used data range
+LastColumn = ws.UsedRange.Columns.Count   ' Finds the last column of the used data range
+
+Application.ScreenUpdating = False
+ws.Range(Cells(14, 5), Cells(LastRow, LastColumn)).ClearContents
+
+Sheets("Instructions & To-Do").Select
+Application.ScreenUpdating = True
+End Sub
+Sub PastePrevValues()
+'
+' PastePrevValues Macro
+' Move values from EOD Marks to Prev Day Marks
+'
+    Dim LastRow As Long
+    Dim LastColumn As Long
+    Dim wkb As Workbook
+    
+    Set wkb = ThisWorkbook
+
+Application.ScreenUpdating = False
+
+LastRow = wkb.Worksheets("EOD Marks").UsedRange.Rows.Count         ' Finds the last row of the used data range
+LastColumn = wkb.Worksheets("EOD Marks").UsedRange.Columns.Count   ' Finds the last column of the used data range
+
+' Copy EOD marks data
+wkb.Worksheets("EOD Marks").Range(Cells(14, 5), Cells(LastRow, LastColumn)).Copy
+' Paste values EOD marks data to the Prev Day Marks sheet
+wkb.Worksheets("Prev Day Marks").Range("E14").PasteSpecial Paste:=xlPasteValues
+' Clear out the contents of the EOD Marks sheet
+wkb.Worksheets("EOD Marks").Range(Cells(14, 5), Cells(LastRow, LastColumn)).ClearContents
+' Sets the user view back to the Instructions sheet.
+wkb.Worksheets("Instructions & To-Do").Activate
+
+Application.ScreenUpdating = True
+End Sub
+Sub SummarytoEOD()
+'
+' Copy values from summary to EOD Marks
+    
+    Dim LastRow As Long
+    Dim LastColumn As Long
+    Dim wkb As Workbook
+    
+    Set wkb = ThisWorkbook
+
+LastRow = wkb.Worksheets("Summary").UsedRange.Rows.Count         ' Finds the last row of the used data range
+LastColumn = wkb.Worksheets("Summary").UsedRange.Columns.Count   ' Finds the last column of the used data range
+
+Application.ScreenUpdating = False
+' Copies Summary data.
+wkb.Worksheets("Summary").Range(Cells(14, 5), Cells(LastRow, LastColumn)).Copy
+' Pastes Summary data to the EOD Marks sheet.
+wkb.Worksheets("EOD Marks").Range("E14").PasteSpecial Paste:=xlPasteValues
+' Sets the user view back to the Instructions sheet.
+wkb.Worksheets("Instructions & To-Do").Activate
+
+Application.ScreenUpdating = True
+End Sub
+Sub Email_From_Excel_Attachments()
+
+    Dim emailApplication As Object
+    Dim emailItem As Object
+    
+    Dim i As Long
+    
+    Dim strDate As String
+    Dim strNewDate As String
+    Dim strFileName As String
+    Dim SDest As String
+    Dim strFdate As String
+    
+    Dim arrDate As Variant
+
+strDate = Date
+arrDate = Split(strDate, "/")
+
+strFileName = "EOD Marks " & arrDate(0) & "-" & arrDate(1) & "-" & arrDate(2)
+strFdate = arrDate(0) & "-" & arrDate(1) & "-" & arrDate(2)
+
+ThisWorkbook.Worksheets("EOD Marks").Copy
+
+ActiveWorkbook.SaveAs Filename:=strFileName
+
+Workbooks(strFileName & ".xlsx").Worksheets("EOD Marks").Range("A1", Cells.SpecialCells(xlCellTypeLastCell)).Value = _
+   Workbooks(strFileName & ".xlsx").ActiveSheet.Range("A1", Cells.SpecialCells(xlCellTypeLastCell)).Value
+
+Set emailApplication = CreateObject("Outlook.Application")
+Set emailItem = emailApplication.CreateItem(0)
+
+'Using the email, add multiple recipients
+ThisWorkbook.Worksheets("Instructions & To-Do").Activate
+SDest = ""
+For i = 2 To 4
+    If SDest = "" Then
+        SDest = Cells(i, 19).Value
+    Else
+        SDest = SDest & ";" & Cells(i, 19).Value
+    End If
+Next i
+
+' Assign the Mail:To list using SDest
+emailItem.To = SDest
+' Assign the subject based on cell U2
+emailItem.Subject = ThisWorkbook.Worksheets("Instructions & To-Do").Range("U2") & " " & strFdate
+' Assign the body based on cell X2
+emailItem.Body = ThisWorkbook.Worksheets("Instructions & To-Do").Range("X2")
+' Attach current Workbook
+emailItem.Attachments.Add Workbooks(strFileName & ".xlsx").FullName
+' Display Email
+emailItem.Display
+Application.Workbooks(strFileName & ".xlsx").Close False
+Set emailItem = Nothing
+Set emailApplication = Nothing
+
+End Sub
